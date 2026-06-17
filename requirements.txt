@@ -1,0 +1,8 @@
+# 杭州喵喵至家网络有限公司 · 大圣.快递物流派费结算系统V1.0
+# Python 3.8 兼容版本
+
+PyQt5==5.15.9
+pandas==1.5.3
+openpyxl==3.1.2
+SQLAlchemy==2.0.23
+PyInstaller==5.13.0

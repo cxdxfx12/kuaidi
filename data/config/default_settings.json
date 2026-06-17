@@ -1,0 +1,7 @@
+{
+  "first_weight": 1.0,
+  "continued_fee": 2.0,
+  "min_fee": 3.0,
+  "station_rate": 0.15,
+  "courier_rate": 0.8
+}
