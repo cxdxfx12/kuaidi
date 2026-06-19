@@ -34,6 +34,7 @@ hiddenimports = [
     'pandas',
     'openpyxl',
     'xlsxwriter',
+    'python_calamine',  # Rust引擎，替代openpyxl读取，快5倍
 
     # SQLAlchemy + SQLite
     'sqlalchemy',

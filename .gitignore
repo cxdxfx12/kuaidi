@@ -1,4 +1,7 @@
 # ================ 数据库 & 大数据文件 ================
+# 账单数据文件（敏感，不入库）
+*.xlsx
+*.csv
 data/app.db
 data/app.db-shm
 data/app.db-wal
