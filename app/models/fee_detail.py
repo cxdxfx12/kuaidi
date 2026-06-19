@@ -1,7 +1,7 @@
-﻿"""
+"""
 派费明细表 - 每一行Excel数据对应一条派费明细
 """
-from sqlalchemy import Column, Integer, String, DateTime, Numeric, Text, Boolean, ForeignKey, JSON
+from sqlalchemy import Column, Integer, String, DateTime, Numeric, Text, Boolean, ForeignKey, JSON, UniqueConstraint
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.models.database import Base
@@ -10,7 +10,10 @@ from app.models.database import Base
 class FeeDetail(Base):
     """派费明细表"""
     __tablename__ = "fee_details"
-    __table_args__ = {"extend_existing": True}
+    __table_args__ = (
+        UniqueConstraint("record_id", "tracking_no", name="uq_fee_details_record_tracking"),
+        {"extend_existing": True},
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     record_id = Column(Integer, ForeignKey("fee_records.id"), nullable=False, comment="关联计算记录")

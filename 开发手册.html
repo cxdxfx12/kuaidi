@@ -1,0 +1,3207 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>大圣·快递物流出港账单结算系统 - 开发手册 v2.2</title>
+
+    <!-- 字体 - Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&family=Noto+Serif+SC:wght@400;600;700&display=swap" rel="stylesheet">
+
+    <!-- Font Awesome 6.5.2 - 世界级图标库 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+    <style>
+        /* ============================================
+           CSS 变量与主题
+           ============================================ */
+        :root {
+            --primary: #e94560;
+            --primary-dark: #c73e54;
+            --secondary: #0f3460;
+            --accent: #f39c12;
+            --success: #00d9a5;
+            --success-dark: #00b894;
+            --warning: #ffc107;
+            --info: #3498db;
+            --purple: #a29bfe;
+            --bg-dark: #0a0a14;
+            --bg-mid: #141424;
+            --bg-card: rgba(22, 22, 38);
+            --border: rgba(255,255,255,0.08);
+            --text: #ffffff;
+            --text-soft: #c8c8d8;
+            --text-muted: #8a8aa0;
+            --gradient-primary: linear-gradient(135deg, #e94560, #f39c12);
+            --gradient-success: linear-gradient(135deg, #00d9a5, #3498db);
+            --gradient-purple: linear-gradient(135deg, #6c5ce7, #a29bfe);
+            --gradient-gold: linear-gradient(135deg, #f39c12, #ffd700);
+            --shadow-lg: 0 20px 60px rgba(0,0,0,0.35);
+            --shadow-card: 0 10px 30px rgba(0,0,0,0.3);
+            --shadow-card-hover: 0 20px 60px rgba(233, 69, 96, 0.25);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: var(--bg-dark);
+            color: var(--text);
+            line-height: 1.75;
+            font-size: 15px;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* ============================================
+           动态背景装饰（增强版）
+           ============================================ */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0; left: 0; right: 0; height: 100vh;
+            background:
+                radial-gradient(ellipse 900px 900px at 10% -10%, rgba(233, 69, 96, 0.22), transparent 60%),
+                radial-gradient(ellipse 700px 700px at 90% 15%, rgba(0, 217, 165, 0.16), transparent 60%),
+                radial-gradient(ellipse 600px 600px at 50% 120%, rgba(108, 92, 231, 0.18), transparent 60%),
+                radial-gradient(ellipse 400px 400px at 20% 60%, rgba(243, 156, 18, 0.08), transparent 60%);
+            pointer-events: none;
+            z-index: 0;
+            animation: bgFloat 20s ease-in-out infinite alternate;
+        }
+
+        @keyframes bgFloat {
+            0%   { transform: translate3d(0, 0, 0) scale(1); }
+            100% { transform: translate3d(-20px, -30px, 0) scale(1.05); }
+        }
+
+        .bg-grid {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%;
+            height: 100%;
+            background-image:
+                linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px);
+            background-size: 50px 50px;
+            pointer-events: none;
+            z-index: 0;
+            mask-image: radial-gradient(ellipse at center, black 40%, transparent 90%);
+            -webkit-mask-image: radial-gradient(ellipse at center, black 40%, transparent 90%);
+        }
+
+        /* 星空浮动粒子 */
+        .particles {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 0;
+            overflow: hidden;
+        }
+        .particle {
+            position: absolute;
+            width: 4px; height: 4px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(255,255,255,0.8), transparent 70%);
+            animation: floatParticle linear infinite;
+            opacity: 0.6;
+        }
+        @keyframes floatParticle {
+            0%   { transform: translateY(0) scale(1); opacity: 0; }
+            10%  { opacity: 0.8; }
+            90%  { opacity: 0.4; }
+            100% { transform: translateY(-110vh) scale(0.5); opacity: 0; }
+        }
+
+        /* ============================================
+           导航栏 - 玻璃态（增强版）
+           ============================================ */
+        .nav {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            background: rgba(10, 10, 20, 0.55);
+            backdrop-filter: blur(28px) saturate(180%);
+            -webkit-backdrop-filter: blur(28px) saturate(180%);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            z-index: 1000;
+            padding: 0 2.5rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        .nav-inner {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 76px;
+        }
+        .nav-brand {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            font-weight: 700;
+            font-size: 1.05rem;
+        }
+        .logo {
+            width: 46px;
+            height: 46px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.4rem;
+            background: linear-gradient(135deg, #e94560, #f39c12);
+            box-shadow:
+                0 8px 24px rgba(233, 69, 96, 0.45),
+                0 0 0 1px rgba(255,255,255,0.1) inset,
+                0 2px 6px rgba(0,0,0,0.3);
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .logo:hover { transform: rotate(-8deg) scale(1.08); }
+        .logo::after {
+            content: '';
+            position: absolute;
+            top: 0; left: -100%;
+            width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+            animation: shimmer 3s infinite;
+        }
+        @keyframes shimmer {
+            0% { left: -100%; } 100% { left: 100%; }
+        }
+
+        .nav-links { display: flex; gap: 6px; align-items: center; }
+        .nav-links a {
+            color: var(--text-soft);
+            text-decoration: none;
+            padding: 10px 18px;
+            border-radius: 10px;
+            font-size: 0.88rem;
+            font-weight: 500;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            position: relative;
+        }
+        .nav-links a i { font-size: 0.9rem; opacity: 0.9; }
+        .nav-links a:hover {
+            color: var(--text);
+            background: rgba(255,255,255,0.05);
+            transform: translateY(-1px);
+        }
+        .nav-links a.active {
+            color: var(--primary);
+            background: rgba(233, 69, 96, 0.12);
+        }
+        .nav-links a.active::after {
+            content: '';
+            position: absolute;
+            bottom: -2px; left: 50%;
+            transform: translateX(-50%);
+            width: 20px; height: 2px;
+            background: var(--gradient-primary);
+            border-radius: 2px;
+        }
+
+        /* ============================================
+           主内容容器
+           ============================================ */
+        .container {
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 0 2.5rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* ============================================
+           英雄区 - Hero
+           ============================================ */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 8rem 2rem 4rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(233, 69, 96, 0.15);
+            border: 1px solid rgba(233, 69, 96, 0.4);
+            color: #ffcccc;
+            padding: 10px 22px;
+            border-radius: 50px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-bottom: 2.5rem;
+            animation: floatUp 0.8s ease-out;
+            backdrop-filter: blur(10px);
+        }
+        .hero-badge i { color: var(--primary); animation: pulse 2s infinite; }
+
+        @keyframes floatUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; } 50% { opacity: 0.5; }
+        }
+
+        .hero h1 {
+            font-size: clamp(2.8rem, 6vw, 5rem);
+            font-weight: 800;
+            line-height: 1.05;
+            margin-bottom: 1.8rem;
+            background: linear-gradient(180deg, #fff 0%, #b0b0c8 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: floatUp 1s ease-out 0.2s both;
+            letter-spacing: -0.02em;
+        }
+        .hero h1 .highlight {
+            background: linear-gradient(135deg, #e94560, #f39c12);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            position: relative;
+        }
+        .hero-subtitle {
+            font-size: clamp(1rem, 1.5vw, 1.25rem);
+            color: var(--text-soft);
+            max-width: 640px;
+            margin: 0 auto 3.5rem;
+            line-height: 1.7;
+            animation: floatUp 1s ease-out 0.4s both;
+        }
+        .hero-subtitle .company {
+            color: var(--text);
+            font-weight: 600;
+        }
+
+        /* 数据指标 */
+        .hero-meta {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1.5rem;
+            margin-top: 2rem;
+            width: 100%;
+            max-width: 900px;
+            animation: floatUp 1s ease-out 0.6s both;
+        }
+
+        .hero-meta-item {
+            background: linear-gradient(145deg, rgba(22,22,38,0.8), rgba(15,15,25,0.9));
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 1.8rem 1.5rem;
+            backdrop-filter: blur(10px);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+        .hero-meta-item::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 3px;
+            background: var(--gradient-primary);
+            transform: scaleX(0);
+            transform-origin: left;
+            transition: transform 0.4s;
+        }
+        .hero-meta-item:nth-child(2)::before { background: var(--gradient-success); }
+        .hero-meta-item:nth-child(3)::before { background: var(--gradient-purple); }
+        .hero-meta-item:nth-child(4)::before { background: var(--gradient-gold); }
+
+        .hero-meta-item:hover {
+            transform: translateY(-6px);
+            border-color: rgba(233, 69, 96, 0.3);
+            box-shadow: var(--shadow-card-hover);
+        }
+        .hero-meta-item:hover::before { transform: scaleX(1); }
+
+        .hero-meta-item .icon-circle {
+            width: 48px;
+            height: 48px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1rem;
+            font-size: 1.3rem;
+            background: rgba(233, 69, 96, 0.15);
+            color: var(--primary);
+        }
+        .hero-meta-item:nth-child(2) .icon-circle { background: rgba(0, 217, 165, 0.15); color: var(--success); }
+        .hero-meta-item:nth-child(3) .icon-circle { background: rgba(162, 155, 254, 0.15); color: var(--purple); }
+        .hero-meta-item:nth-child(4) .icon-circle { background: rgba(243, 156, 18, 0.15); color: var(--accent); }
+
+        .hero-meta-item .value {
+            font-size: 2.2rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #fff, #a0a0c0);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            line-height: 1;
+        }
+        .hero-meta-item .label {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-top: 8px;
+            font-weight: 500;
+        }
+
+        /* ============================================
+           章节
+           ============================================ */
+        section {
+            padding: 6rem 0;
+            position: relative;
+            z-index: 1;
+        }
+        section::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 50%;
+            transform: translateX(-50%);
+            width: 80%; height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
+        }
+        .section-header {
+            margin-bottom: 3.5rem;
+            position: relative;
+        }
+        .section-number {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            color: var(--primary);
+            margin-bottom: 1rem;
+            letter-spacing: 3px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .section-number::before {
+            content: '';
+            width: 20px; height: 1px;
+            background: var(--primary);
+        }
+        .section-title {
+            font-size: clamp(1.8rem, 3vw, 2.6rem);
+            font-weight: 800;
+            margin-bottom: 1rem;
+            letter-spacing: -0.01em;
+            line-height: 1.2;
+        }
+        .section-title i {
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-right: 12px;
+        }
+        .section-desc {
+            color: var(--text-soft);
+            max-width: 760px;
+            font-size: 1.05rem;
+            line-height: 1.8;
+        }
+
+        /* ============================================
+           卡片网格
+           ============================================ */
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.8rem;
+        }
+        .card {
+            background: linear-gradient(145deg, rgba(22,22,38,0.7), rgba(15,15,25,0.8));
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 2rem;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(12px);
+        }
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0; right: 0;
+            width: 100px; height: 100px;
+            background: radial-gradient(circle at top right, rgba(233, 69, 96, 0.08), transparent);
+            opacity: 0;
+            transition: opacity 0.4s;
+            pointer-events: none;
+        }
+        .card:hover {
+            border-color: rgba(233, 69, 96, 0.35);
+            transform: translateY(-8px);
+            box-shadow: var(--shadow-card-hover);
+        }
+        .card:hover::before { opacity: 1; }
+
+        .card-icon {
+            width: 60px; height: 60px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.6rem;
+            margin-bottom: 1.5rem;
+            background: linear-gradient(135deg, rgba(233, 69, 96, 0.2), rgba(243, 156, 18, 0.15));
+            color: var(--primary);
+            position: relative;
+            transition: all 0.4s;
+        }
+        .card:hover .card-icon {
+            transform: scale(1.1) rotate(-5deg);
+            box-shadow: 0 10px 30px rgba(233, 69, 96, 0.3);
+        }
+        .card-icon.green {
+            background: linear-gradient(135deg, rgba(0, 217, 165, 0.2), rgba(52, 152, 219, 0.15));
+            color: var(--success);
+        }
+        .card:hover .card-icon.green { box-shadow: 0 10px 30px rgba(0, 217, 165, 0.3); }
+        .card-icon.purple {
+            background: linear-gradient(135deg, rgba(108, 92, 231, 0.2), rgba(162, 155, 254, 0.15));
+            color: var(--purple);
+        }
+        .card:hover .card-icon.purple { box-shadow: 0 10px 30px rgba(162, 155, 254, 0.3); }
+        .card-icon.gold {
+            background: linear-gradient(135deg, rgba(243, 156, 18, 0.2), rgba(255, 193, 7, 0.15));
+            color: var(--accent);
+        }
+        .card:hover .card-icon.gold { box-shadow: 0 10px 30px rgba(243, 156, 18, 0.3); }
+
+        .card h3 {
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin-bottom: 0.8rem;
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .card p {
+            color: var(--text-soft);
+            font-size: 0.92rem;
+            line-height: 1.75;
+        }
+
+        /* ============================================
+           架构图
+           ============================================ */
+        .arch-diagram {
+            background: linear-gradient(145deg, rgba(12, 12, 22, 0.9), rgba(8, 8, 16, 0.95));
+            border: 1px solid var(--border);
+            border-radius: 22px;
+            padding: 2.5rem;
+            font-family: 'JetBrains Mono', monospace;
+            position: relative;
+            overflow: hidden;
+        }
+        .arch-diagram::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 2px;
+            background: linear-gradient(90deg, transparent, var(--primary), transparent);
+            animation: slideBorder 4s infinite;
+        }
+        @keyframes slideBorder {
+            0%, 100% { opacity: 0.3; } 50% { opacity: 1; }
+        }
+
+        .arch-layer {
+            display: flex;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+            align-items: stretch;
+        }
+        .arch-layer:last-child { margin-bottom: 0; }
+
+        .arch-layer-label {
+            min-width: 130px;
+            background: linear-gradient(135deg, rgba(233, 69, 96, 0.1), rgba(243, 156, 18, 0.05));
+            padding: 1.2rem 1rem;
+            border-radius: 14px;
+            font-size: 0.78rem;
+            color: var(--primary);
+            letter-spacing: 1.5px;
+            font-weight: 700;
+            text-align: center;
+            writing-mode: vertical-rl;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(233, 69, 96, 0.2);
+            position: relative;
+        }
+        .arch-layer-label i {
+            font-size: 1.2rem;
+            display: block;
+            margin-bottom: 8px;
+            writing-mode: horizontal-tb;
+        }
+
+        .arch-components {
+            display: flex;
+            gap: 0.8rem;
+            flex-wrap: wrap;
+            flex: 1;
+            align-content: center;
+        }
+        .arch-component {
+            background: rgba(20, 20, 35, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            padding: 0.9rem 1.3rem;
+            border-radius: 12px;
+            white-space: nowrap;
+            font-size: 0.88rem;
+            color: var(--text-soft);
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-family: 'Inter', sans-serif;
+            font-weight: 500;
+        }
+        .arch-component i { color: var(--primary); font-size: 0.9rem; }
+        .arch-component:hover {
+            transform: translateY(-3px);
+            border-color: rgba(233, 69, 96, 0.4);
+            background: rgba(233, 69, 96, 0.08);
+        }
+        .arch-component.highlight {
+            border-color: rgba(233, 69, 96, 0.4);
+            background: linear-gradient(135deg, rgba(233, 69, 96, 0.15), rgba(243, 156, 18, 0.08));
+            color: #fff;
+            box-shadow: 0 8px 24px rgba(233, 69, 96, 0.2);
+            position: relative;
+        }
+
+        /* ============================================
+           代码块 - 精美风格
+           ============================================ */
+        .code-block {
+            background: #0a0a14;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 18px;
+            overflow: hidden;
+            margin: 1.8rem 0;
+            box-shadow: var(--shadow-card);
+        }
+        .code-header {
+            background: linear-gradient(180deg, #1a1a2e, #141420);
+            padding: 0.9rem 1.3rem;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .code-header .dots {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+        .code-header .dot {
+            width: 12px; height: 12px;
+            border-radius: 50%;
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.3);
+        }
+        .code-header .dot.red { background: #ff5f56; }
+        .code-header .dot.yellow { background: #ffbd2e; }
+        .code-header .dot.green { background: #27ca40; }
+        .code-header .filename {
+            color: var(--text-soft);
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .code-header .filename i { color: var(--accent); font-size: 0.95rem; }
+        .code-content {
+            padding: 1.8rem;
+            overflow-x: auto;
+        }
+        pre {
+            margin: 0;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.86rem;
+            line-height: 1.75;
+            color: #e8e8e8;
+        }
+        code { font-family: 'JetBrains Mono', monospace; }
+
+        .inline-code {
+            background: linear-gradient(135deg, rgba(233, 69, 96, 0.15), rgba(243, 156, 18, 0.1));
+            color: #ffcc99;
+            padding: 3px 10px;
+            border-radius: 6px;
+            font-size: 0.86em;
+            font-family: 'JetBrains Mono', monospace;
+            border: 1px solid rgba(233, 69, 96, 0.2);
+            font-weight: 500;
+        }
+
+        /* 语法高亮 */
+        .keyword { color: #ff79c6; font-weight: 600; }
+        .string { color: #f1fa8c; }
+        .number { color: #bd93f9; font-weight: 600; }
+        .comment { color: #6272a4; font-style: italic; }
+        .function { color: #50fa7b; font-weight: 600; }
+        .class { color: #8be9fd; font-weight: 600; }
+        .decorator { color: #ffb86c; }
+
+        /* ============================================
+           表格
+           ============================================ */
+        .table-wrapper {
+            overflow-x: auto;
+            margin: 1.8rem 0;
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            overflow: hidden;
+            background: rgba(15, 15, 25, 0.6);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.92rem;
+        }
+        th {
+            text-align: left;
+            padding: 1.1rem 1.3rem;
+            background: linear-gradient(180deg, rgba(30, 30, 50, 0.8), rgba(22, 22, 38, 0.9));
+            color: var(--text);
+            font-weight: 700;
+            font-size: 0.88rem;
+            letter-spacing: 0.3px;
+            border-bottom: 2px solid rgba(233, 69, 96, 0.3);
+        }
+        th i { color: var(--primary); margin-right: 8px; }
+        td {
+            padding: 1rem 1.3rem;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            vertical-align: top;
+            color: var(--text-soft);
+        }
+        tr:hover {
+            background: rgba(233, 69, 96, 0.04);
+        }
+        tr:last-child td { border-bottom: none; }
+
+        .type-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .type-badge.string { background: rgba(0, 217, 165, 0.1); color: #66e0c2; }
+        .type-badge.number { background: rgba(255, 193, 7, 0.1); color: #ffd76e; }
+        .type-badge.boolean { background: rgba(233, 69, 96, 0.1); color: #ff8fa3; }
+        .type-badge.json { background: rgba(108, 92, 231, 0.1); color: #b3aaff; }
+
+        /* ============================================
+           功能列表
+           ============================================ */
+        .feature-list {
+            list-style: none;
+            margin-top: 0.5rem;
+        }
+        .feature-list li {
+            padding: 0.6rem 0;
+            padding-left: 1.8rem;
+            position: relative;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            font-size: 0.92rem;
+            color: var(--text-soft);
+        }
+        .feature-list li::before {
+            content: '\f061';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            position: absolute;
+            left: 0;
+            top: 0.75rem;
+            color: var(--primary);
+            font-size: 0.75rem;
+            transition: all 0.3s;
+        }
+        .feature-list li:hover::before {
+            transform: translateX(4px);
+            color: var(--accent);
+        }
+
+        /* ============================================
+           Tab 切换
+           ============================================ */
+        .tabs {
+            display: flex;
+            gap: 6px;
+            background: rgba(15, 15, 25, 0.6);
+            padding: 6px;
+            border-radius: 14px;
+            margin-bottom: 1.8rem;
+            overflow-x: auto;
+            border: 1px solid var(--border);
+        }
+        .tab {
+            padding: 12px 22px;
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            white-space: nowrap;
+            transition: all 0.3s;
+            font-family: 'Inter', sans-serif;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-soft);
+        }
+        .tab i { font-size: 1rem; }
+        .tab:hover {
+            color: var(--text);
+            background: rgba(255,255,255,0.04);
+        }
+        .tab.active {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: #fff;
+            box-shadow: 0 6px 20px rgba(233, 69, 96, 0.35);
+        }
+        .tab-content { display: none; }
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.5s ease-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ============================================
+           流程图 - Flow
+           ============================================ */
+        .flow {
+            display: flex;
+            align-items: stretch;
+            justify-content: center;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin: 2rem 0;
+        }
+        .flow-item {
+            background: linear-gradient(145deg, rgba(22,22,38,0.8), rgba(15,15,25,0.9));
+            border: 1px solid var(--border);
+            padding: 1.4rem 1.8rem;
+            border-radius: 16px;
+            text-align: center;
+            min-width: 140px;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+        .flow-item i {
+            font-size: 1.8rem;
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            display: block;
+            margin-bottom: 0.8rem;
+        }
+        .flow-item strong {
+            display: block;
+            font-size: 0.95rem;
+            color: var(--text);
+            font-weight: 700;
+        }
+        .flow-item small {
+            display: block;
+            color: var(--text-muted);
+            font-size: 0.78rem;
+            margin-top: 4px;
+        }
+        .flow-item:hover {
+            transform: translateY(-5px) scale(1.03);
+            border-color: rgba(233, 69, 96, 0.4);
+            box-shadow: 0 15px 40px rgba(233, 69, 96, 0.2);
+        }
+        .flow-arrow {
+            color: var(--primary);
+            font-size: 1.4rem;
+            align-self: center;
+            animation: arrowBounce 2s infinite;
+        }
+        @keyframes arrowBounce {
+            0%, 100% { transform: translateX(0); }
+            50% { transform: translateX(6px); }
+        }
+
+        /* ============================================
+           高亮盒子
+           ============================================ */
+        .highlight-box {
+            background: linear-gradient(135deg, rgba(233, 69, 96, 0.06), rgba(0, 217, 165, 0.06));
+            border: 1px solid rgba(233, 69, 96, 0.25);
+            border-radius: 22px;
+            padding: 2.2rem;
+            margin: 2.2rem 0;
+            position: relative;
+            overflow: hidden;
+        }
+        .highlight-box::before {
+            content: '';
+            position: absolute;
+            top: -50%; right: -20%;
+            width: 400px; height: 400px;
+            background: radial-gradient(circle, rgba(233, 69, 96, 0.1), transparent);
+            pointer-events: none;
+        }
+        .highlight-box h4 {
+            color: var(--primary);
+            margin-bottom: 1.2rem;
+            font-size: 1.15rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            position: relative;
+        }
+        .highlight-box h4 i {
+            width: 40px; height: 40px;
+            border-radius: 12px;
+            background: rgba(233, 69, 96, 0.2);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+        }
+
+        /* ============================================
+           文件树
+           ============================================ */
+        .tree {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.86rem;
+            line-height: 2;
+            padding: 0.5rem 0;
+        }
+        .tree-item {
+            padding-left: 2rem;
+            position: relative;
+            transition: all 0.2s;
+        }
+        .tree-item::before {
+            content: '├─';
+            position: absolute;
+            left: 0;
+            color: rgba(255,255,255,0.2);
+            font-weight: 400;
+        }
+        .tree-item:last-child::before { content: '└─'; }
+        .tree-folder {
+            color: #ffd76e;
+            font-weight: 600;
+        }
+        .tree-folder::before {
+            content: '\f07b';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            margin-right: 8px;
+            color: var(--accent);
+        }
+        .tree-file { color: #66e0c2; }
+        .tree-file::before {
+            content: '\f15b';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            margin-right: 8px;
+            color: var(--success);
+        }
+        .tree-item .tree-folder, .tree-item .tree-file {
+            display: inline;
+        }
+        .tree-item .tree-item-folder-icon::before {
+            content: '\f07b';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--accent);
+            margin-right: 8px;
+        }
+
+        /* 统计网格 */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1.5rem;
+            margin: 2.2rem 0;
+        }
+        .stat-card {
+            background: linear-gradient(145deg, rgba(22,22,38,0.7), rgba(15,15,25,0.9));
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 2rem 1.5rem;
+            text-align: center;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+        .stat-card::after {
+            content: '';
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            height: 3px;
+            background: var(--gradient-primary);
+            transform: scaleX(0.3);
+            transition: transform 0.4s;
+        }
+        .stat-card:hover {
+            transform: translateY(-6px);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.3);
+        }
+        .stat-card:hover::after {
+            transform: scaleX(1);
+        }
+        .stat-card .stat-icon {
+            width: 56px; height: 56px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, rgba(233, 69, 96, 0.2), rgba(243, 156, 18, 0.15));
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1.2rem;
+            font-size: 1.5rem;
+        }
+        .stat-value {
+            font-size: 2.2rem;
+            font-weight: 800;
+            line-height: 1;
+            background: linear-gradient(135deg, #fff, #c0c0d0);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .stat-label {
+            color: var(--text-muted);
+            font-size: 0.88rem;
+            margin-top: 0.8rem;
+            font-weight: 500;
+        }
+
+        /* 滚动动画 */
+        .reveal {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .reveal.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* 规则层级图 */
+        .rule-layers {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1.5rem;
+            padding: 1rem;
+        }
+        .rule-layer {
+            width: 100%;
+            max-width: 600px;
+            padding: 1.8rem 2.2rem;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+            position: relative;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .rule-layer:hover {
+            transform: scale(1.03) translateX(10px);
+        }
+        .rule-layer-1 {
+            background: linear-gradient(135deg, rgba(233, 69, 96, 0.15), rgba(243, 156, 18, 0.08));
+            border: 2px solid rgba(233, 69, 96, 0.35);
+        }
+        .rule-layer-2 {
+            background: linear-gradient(135deg, rgba(243, 156, 18, 0.15), rgba(255, 193, 7, 0.08));
+            border: 2px solid rgba(243, 156, 18, 0.35);
+            margin-left: 2rem;
+        }
+        .rule-layer-3 {
+            background: linear-gradient(135deg, rgba(0, 217, 165, 0.15), rgba(52, 152, 219, 0.08));
+            border: 2px solid rgba(0, 217, 165, 0.35);
+            margin-left: 4rem;
+        }
+        .rule-layer-icon {
+            width: 64px; height: 64px;
+            border-radius: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
+            flex-shrink: 0;
+            background: rgba(255,255,255,0.05);
+        }
+        .rule-layer-1 .rule-layer-icon { color: var(--primary); background: rgba(233, 69, 96, 0.15); }
+        .rule-layer-2 .rule-layer-icon { color: var(--accent); background: rgba(243, 156, 18, 0.15); }
+        .rule-layer-3 .rule-layer-icon { color: var(--success); background: rgba(0, 217, 165, 0.15); }
+        .rule-layer-content strong {
+            display: block;
+            font-size: 1.15rem;
+            font-weight: 700;
+            margin-bottom: 0.3rem;
+        }
+        .rule-layer-content span {
+            color: var(--text-soft);
+            font-size: 0.9rem;
+        }
+
+        /* 页脚 */
+        footer {
+            background: linear-gradient(180deg, transparent, rgba(0,0,0,0.3));
+            padding: 4rem 0 3rem;
+            text-align: center;
+            border-top: 1px solid var(--border);
+            position: relative;
+            z-index: 1;
+        }
+        footer .footer-logo {
+            width: 60px; height: 60px;
+            margin: 0 auto 1.5rem;
+            border-radius: 18px;
+            background: var(--gradient-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
+            color: #fff;
+            box-shadow: 0 15px 40px rgba(233, 69, 96, 0.4);
+        }
+        footer p {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            margin: 0.3rem 0;
+        }
+        footer .social-icons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin: 1.5rem 0;
+        }
+        footer .social-icons a {
+            width: 44px; height: 44px;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.05);
+            color: var(--text-soft);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            transition: all 0.3s;
+        }
+        footer .social-icons a:hover {
+            background: var(--primary);
+            color: #fff;
+            transform: translateY(-3px);
+        }
+
+        /* 响应式 */
+        @media (max-width: 768px) {
+            .hero h1 { font-size: 2.5rem; }
+            .nav-links { display: none; }
+            .arch-layer { flex-direction: column; }
+            .arch-layer-label { writing-mode: horizontal-tb; min-height: auto; }
+            .container { padding: 0 1.2rem; }
+        }
+
+        /* 滚动条 */
+        ::-webkit-scrollbar { width: 10px; height: 10px; }
+        ::-webkit-scrollbar-track { background: var(--bg-dark); }
+        ::-webkit-scrollbar-thumb {
+            background: linear-gradient(180deg, #444, #555);
+            border-radius: 5px;
+            border: 2px solid var(--bg-dark);
+        }
+        ::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, var(--primary), var(--primary-dark)); }
+
+        /* 打印 */
+        @media print { .nav, .hero, .back-to-top { display: none; } }
+
+        /* ============================================
+           返回顶部按钮（精美）
+           ============================================ */
+        .back-to-top {
+            position: fixed;
+            right: 32px;
+            bottom: 32px;
+            width: 58px;
+            height: 58px;
+            border-radius: 18px;
+            background: linear-gradient(135deg, #e94560, #f39c12);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.4rem;
+            cursor: pointer;
+            z-index: 999;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(20px) scale(0.9);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow:
+                0 10px 40px rgba(233, 69, 96, 0.5),
+                0 0 0 1px rgba(255,255,255,0.15) inset;
+            border: none;
+        }
+        .back-to-top.visible {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0) scale(1);
+        }
+        .back-to-top:hover {
+            transform: translateY(-6px) scale(1.05);
+            box-shadow:
+                0 16px 50px rgba(233, 69, 96, 0.6),
+                0 0 0 1px rgba(255,255,255,0.2) inset;
+        }
+        .back-to-top::after {
+            content: '';
+            position: absolute;
+            inset: -6px;
+            border-radius: 22px;
+            background: linear-gradient(135deg, #e94560, #f39c12);
+            opacity: 0.3;
+            filter: blur(20px);
+            z-index: -1;
+        }
+
+        /* Hero CTA 按钮组 */
+        .hero-cta {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin-top: 4rem;
+            flex-wrap: wrap;
+            animation: floatUp 1s ease-out 0.8s both;
+        }
+        .btn-primary, .btn-secondary {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px 32px;
+            border-radius: 50px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            color: #fff;
+            box-shadow: 0 10px 40px rgba(233, 69, 96, 0.4);
+            border: none;
+        }
+        .btn-primary:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 60px rgba(233, 69, 96, 0.55);
+        }
+        .btn-secondary {
+            background: rgba(255,255,255,0.06);
+            color: var(--text);
+            border: 1px solid rgba(255,255,255,0.12);
+            backdrop-filter: blur(10px);
+        }
+        .btn-secondary:hover {
+            background: rgba(255,255,255,0.1);
+            border-color: rgba(255,255,255,0.2);
+            transform: translateY(-4px);
+        }
+
+        /* 章节头部增强 */
+        .section-header::before {
+            content: '';
+            position: absolute;
+            left: 0; top: 18px;
+            width: 4px; height: 40px;
+            background: linear-gradient(180deg, var(--primary), var(--accent));
+            border-radius: 2px;
+        }
+        .section-header {
+            padding-left: 1.5rem;
+            position: relative;
+            margin-bottom: 3.5rem;
+        }
+
+        /* 精美卡片 - 增强版 */
+        .card {
+            background: linear-gradient(145deg, rgba(22,22,38,0.6), rgba(15,15,25,0.75));
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 24px;
+            padding: 2.2rem;
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+        }
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0; right: 0;
+            width: 180px; height: 180px;
+            background: radial-gradient(circle at top right, rgba(233, 69, 96, 0.1), transparent 60%);
+            opacity: 0;
+            transition: opacity 0.6s, transform 0.6s;
+            pointer-events: none;
+            transform: translate(50%, -50%);
+        }
+        .card:hover {
+            border-color: rgba(233, 69, 96, 0.4);
+            transform: translateY(-10px);
+            box-shadow:
+                0 30px 80px rgba(233, 69, 96, 0.2),
+                0 0 0 1px rgba(255,255,255,0.05) inset;
+        }
+        .card:hover::before { opacity: 1; }
+
+        .card-icon {
+            width: 64px; height: 64px;
+            border-radius: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.7rem;
+            margin-bottom: 1.5rem;
+            background: linear-gradient(135deg, rgba(233, 69, 96, 0.2), rgba(243, 156, 18, 0.1));
+            color: var(--primary);
+            position: relative;
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 0 0 1px rgba(233, 69, 96, 0.15) inset;
+        }
+        .card:hover .card-icon {
+            transform: rotate(-8deg) scale(1.1);
+            box-shadow: 0 12px 36px rgba(233, 69, 96, 0.4), 0 0 0 1px rgba(233, 69, 96, 0.2) inset;
+        }
+        .card-icon.green {
+            background: linear-gradient(135deg, rgba(0, 217, 165, 0.2), rgba(52, 152, 219, 0.1));
+            color: var(--success);
+            box-shadow: 0 0 0 1px rgba(0, 217, 165, 0.15) inset;
+        }
+        .card:hover .card-icon.green { box-shadow: 0 12px 36px rgba(0, 217, 165, 0.4), 0 0 0 1px rgba(0, 217, 165, 0.2) inset; }
+        .card-icon.purple {
+            background: linear-gradient(135deg, rgba(108, 92, 231, 0.2), rgba(162, 155, 254, 0.1));
+            color: var(--purple);
+            box-shadow: 0 0 0 1px rgba(108, 92, 231, 0.15) inset;
+        }
+        .card:hover .card-icon.purple { box-shadow: 0 12px 36px rgba(108, 92, 231, 0.4), 0 0 0 1px rgba(108, 92, 231, 0.2) inset; }
+        .card-icon.gold {
+            background: linear-gradient(135deg, rgba(243, 156, 18, 0.2), rgba(255, 193, 7, 0.1));
+            color: var(--accent);
+            box-shadow: 0 0 0 1px rgba(243, 156, 18, 0.15) inset;
+        }
+        .card:hover .card-icon.gold { box-shadow: 0 12px 36px rgba(243, 156, 18, 0.4), 0 0 0 1px rgba(243, 156, 18, 0.2) inset; }
+
+        .card h3 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 0.9rem;
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .card p {
+            color: var(--text-soft);
+            font-size: 0.95rem;
+            line-height: 1.8;
+        }
+
+        /* 高亮盒子增强版 */
+        .highlight-box {
+            background: linear-gradient(135deg, rgba(233, 69, 96, 0.08), rgba(0, 217, 165, 0.06));
+            border: 1px solid rgba(233, 69, 96, 0.25);
+            border-radius: 24px;
+            padding: 2.5rem;
+            margin: 2.5rem 0;
+            position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(12px);
+        }
+        .highlight-box::before {
+            content: '';
+            position: absolute;
+            top: -80%; right: -20%;
+            width: 500px; height: 500px;
+            background: radial-gradient(circle, rgba(233, 69, 96, 0.15), transparent 60%);
+            pointer-events: none;
+        }
+        .highlight-box::after {
+            content: '';
+            position: absolute;
+            bottom: -50%; left: -10%;
+            width: 400px; height: 400px;
+            background: radial-gradient(circle, rgba(0, 217, 165, 0.1), transparent 60%);
+            pointer-events: none;
+        }
+        .highlight-box h4 {
+            color: var(--primary);
+            margin-bottom: 1.3rem;
+            font-size: 1.25rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            position: relative;
+        }
+        .highlight-box h4 i {
+            width: 44px; height: 44px;
+            border-radius: 14px;
+            background: linear-gradient(135deg, rgba(233, 69, 96, 0.25), rgba(243, 156, 18, 0.15));
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.15rem;
+            box-shadow: 0 0 0 1px rgba(233, 69, 96, 0.2) inset;
+        }
+
+        /* 统计卡片增强 */
+        .stat-card {
+            background: linear-gradient(145deg, rgba(22,22,38,0.7), rgba(15,15,25,0.85));
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 22px;
+            padding: 2.2rem 1.5rem;
+            text-align: center;
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(12px);
+        }
+        .stat-card::after {
+            content: '';
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            height: 3px;
+            background: var(--gradient-primary);
+            transform: scaleX(0.2);
+            transform-origin: left;
+            transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .stat-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 25px 60px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.06) inset;
+        }
+        .stat-card:hover::after { transform: scaleX(1); }
+        .stat-card .stat-icon {
+            width: 60px; height: 60px;
+            border-radius: 18px;
+            background: linear-gradient(135deg, rgba(233, 69, 96, 0.2), rgba(243, 156, 18, 0.12));
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1.3rem;
+            font-size: 1.6rem;
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .stat-card:hover .stat-icon { transform: rotate(-8deg) scale(1.1); }
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: 800;
+            line-height: 1;
+            background: linear-gradient(135deg, #fff, #d0d0e0);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: -0.02em;
+        }
+        .stat-label {
+            color: var(--text-muted);
+            font-size: 0.92rem;
+            margin-top: 12px;
+            font-weight: 500;
+        }
+
+        /* 流程条目增强 */
+        .flow-item {
+            background: linear-gradient(145deg, rgba(22,22,38,0.7), rgba(15,15,25,0.85));
+            border: 1px solid rgba(255,255,255,0.08);
+            padding: 1.8rem 2rem;
+            border-radius: 20px;
+            text-align: center;
+            min-width: 150px;
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(12px);
+        }
+        .flow-item i {
+            font-size: 2rem;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            display: block;
+            margin-bottom: 1rem;
+            transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .flow-item strong {
+            display: block;
+            font-size: 1rem;
+            color: var(--text);
+            font-weight: 700;
+        }
+        .flow-item small {
+            display: block;
+            color: var(--text-muted);
+            font-size: 0.83rem;
+            margin-top: 6px;
+        }
+        .flow-item:hover {
+            transform: translateY(-8px) scale(1.04);
+            border-color: rgba(233, 69, 96, 0.4);
+            box-shadow: 0 20px 50px rgba(233, 69, 96, 0.25), 0 0 0 1px rgba(255,255,255,0.05) inset;
+        }
+        .flow-item:hover i { transform: scale(1.15) rotate(-5deg); }
+
+        /* Tab 切换增强 */
+        .tabs {
+            display: flex;
+            gap: 8px;
+            background: rgba(15, 15, 25, 0.5);
+            padding: 8px;
+            border-radius: 18px;
+            margin-bottom: 2rem;
+            overflow-x: auto;
+            border: 1px solid rgba(255,255,255,0.06);
+            backdrop-filter: blur(12px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+        }
+        .tab {
+            padding: 14px 24px;
+            background: transparent;
+            border: none;
+            color: var(--text-soft);
+            cursor: pointer;
+            border-radius: 12px;
+            font-size: 0.92rem;
+            white-space: nowrap;
+            transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+            font-family: 'Inter', sans-serif;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .tab i { font-size: 1.05rem; transition: transform 0.3s; }
+        .tab:hover {
+            color: var(--text);
+            background: rgba(255,255,255,0.06);
+        }
+        .tab:hover i { transform: scale(1.15); }
+        .tab.active {
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            color: #fff;
+            box-shadow: 0 8px 24px rgba(233, 69, 96, 0.4);
+        }
+
+        /* 表格增强 */
+        .table-wrapper {
+            overflow-x: auto;
+            margin: 2rem 0;
+            border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.08);
+            overflow: hidden;
+            background: rgba(15, 15, 25, 0.5);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.25);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.95rem;
+        }
+        th {
+            text-align: left;
+            padding: 1.3rem 1.5rem;
+            background: linear-gradient(180deg, rgba(30, 30, 50, 0.7), rgba(22, 22, 38, 0.85));
+            color: var(--text);
+            font-weight: 700;
+            font-size: 0.9rem;
+            letter-spacing: 0.3px;
+            border-bottom: 2px solid rgba(233, 69, 96, 0.35);
+            white-space: nowrap;
+        }
+        th i { color: var(--primary); margin-right: 8px; }
+        td {
+            padding: 1.15rem 1.5rem;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            vertical-align: top;
+            color: var(--text-soft);
+        }
+        tr {
+            transition: background 0.3s;
+        }
+        tr:hover {
+            background: rgba(233, 69, 96, 0.06);
+        }
+        tr:last-child td { border-bottom: none; }
+
+        /* 代码块增强 */
+        .code-block {
+            background: linear-gradient(145deg, #0a0a14, #0f0f1e);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 20px;
+            overflow: hidden;
+            margin: 2rem 0;
+            box-shadow:
+                0 20px 60px rgba(0,0,0,0.4),
+                0 0 0 1px rgba(255,255,255,0.03) inset;
+        }
+        .code-header {
+            background: linear-gradient(180deg, #1a1a2e, #141420);
+            padding: 1rem 1.3rem;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .code-header .dots {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+        .code-header .dot {
+            width: 12px; height: 12px;
+            border-radius: 50%;
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.5);
+        }
+        .code-header .dot.red { background: #ff5f56; }
+        .code-header .dot.yellow { background: #ffbd2e; }
+        .code-header .dot.green { background: #27ca40; }
+        .code-header .filename {
+            color: var(--text-soft);
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .code-header .filename i { color: var(--accent); font-size: 1rem; }
+        .code-content {
+            padding: 2rem;
+            overflow-x: auto;
+        }
+        pre {
+            margin: 0;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            line-height: 1.85;
+            color: #e8e8e8;
+        }
+        code { font-family: 'JetBrains Mono', monospace; }
+
+        /* 页脚增强 */
+        footer {
+            background: linear-gradient(180deg, transparent, rgba(0,0,0,0.4));
+            padding: 5rem 0 3rem;
+            text-align: center;
+            border-top: 1px solid rgba(255,255,255,0.08);
+            position: relative;
+            z-index: 1;
+        }
+        footer .footer-logo {
+            width: 68px; height: 68px;
+            margin: 0 auto 1.8rem;
+            border-radius: 20px;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            color: #fff;
+            box-shadow:
+                0 20px 50px rgba(233, 69, 96, 0.45),
+                0 0 0 1px rgba(255,255,255,0.15) inset;
+            position: relative;
+        }
+        footer .footer-logo::after {
+            content: '';
+            position: absolute;
+            inset: -10px;
+            border-radius: 26px;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            opacity: 0.25;
+            filter: blur(25px);
+            z-index: -1;
+        }
+        footer h3 {
+            font-size: 1.6rem;
+            font-weight: 800;
+            margin-bottom: 0.6rem;
+            color: var(--text);
+            background: linear-gradient(135deg, #fff, #a0a0c0);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        footer p {
+            color: var(--text-muted);
+            font-size: 0.92rem;
+            margin: 0.4rem 0;
+            line-height: 1.8;
+        }
+        footer .social-icons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin: 2rem 0;
+        }
+        footer .social-icons a {
+            width: 52px; height: 52px;
+            border-radius: 16px;
+            background: linear-gradient(145deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+            color: var(--text-soft);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            font-size: 1.15rem;
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+        footer .social-icons a:hover {
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            color: #fff;
+            transform: translateY(-6px) scale(1.05);
+            box-shadow: 0 12px 32px rgba(233, 69, 96, 0.45);
+            border-color: transparent;
+        }
+        footer .footer-bottom {
+            margin-top: 2.5rem;
+            padding-top: 2rem;
+            border-top: 1px solid rgba(255,255,255,0.05);
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        /* 滚动动画（Intersection Observer） */
+        .reveal {
+            opacity: 0;
+            transform: translateY(40px);
+            transition: all 0.9s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .reveal.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* 规则层级图增强 */
+        .rule-layer {
+            width: 100%;
+            max-width: 650px;
+            padding: 2rem 2.3rem;
+            border-radius: 22px;
+            display: flex;
+            align-items: center;
+            gap: 1.6rem;
+            position: relative;
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(10px);
+        }
+        .rule-layer:hover {
+            transform: scale(1.025) translateX(15px);
+        }
+        .rule-layer-icon {
+            width: 70px; height: 70px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            flex-shrink: 0;
+            background: rgba(255,255,255,0.05);
+            transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .rule-layer:hover .rule-layer-icon { transform: rotate(-8deg) scale(1.1); }
+        .rule-layer-1 {
+            background: linear-gradient(135deg, rgba(233, 69, 96, 0.15), rgba(243, 156, 18, 0.08));
+            border: 2px solid rgba(233, 69, 96, 0.35);
+        }
+        .rule-layer-2 {
+            background: linear-gradient(135deg, rgba(243, 156, 18, 0.15), rgba(255, 193, 7, 0.08));
+            border: 2px solid rgba(243, 156, 18, 0.35);
+            margin-left: 2.5rem;
+        }
+        .rule-layer-3 {
+            background: linear-gradient(135deg, rgba(0, 217, 165, 0.15), rgba(52, 152, 219, 0.08));
+            border: 2px solid rgba(0, 217, 165, 0.35);
+            margin-left: 5rem;
+        }
+        .rule-layer-1 .rule-layer-icon { color: var(--primary); background: rgba(233, 69, 96, 0.18); }
+        .rule-layer-2 .rule-layer-icon { color: var(--accent); background: rgba(243, 156, 18, 0.18); }
+        .rule-layer-3 .rule-layer-icon { color: var(--success); background: rgba(0, 217, 165, 0.18); }
+        .rule-layer-content strong {
+            display: block;
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin-bottom: 0.4rem;
+            color: var(--text);
+        }
+        .rule-layer-content span {
+            color: var(--text-soft);
+            font-size: 0.93rem;
+            line-height: 1.6;
+        }
+
+        /* Type badge 增强 */
+        .type-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 12px;
+            border-radius: 8px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* 进度条（用于性能指标） */
+        .perf-row {
+            display: flex;
+            align-items: center;
+            gap: 1.2rem;
+            padding: 0.8rem 0;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+        }
+        .perf-row:last-child { border-bottom: none; }
+        .perf-label {
+            min-width: 160px;
+            color: var(--text-soft);
+            font-size: 0.93rem;
+            font-weight: 500;
+        }
+        .perf-label i {
+            color: var(--primary);
+            margin-right: 8px;
+            font-size: 0.95rem;
+        }
+        .perf-bar {
+            flex: 1;
+            height: 10px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 10px;
+            overflow: hidden;
+            position: relative;
+        }
+        .perf-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), var(--accent));
+            border-radius: 10px;
+            position: relative;
+            animation: perfFill 2s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 0 10px rgba(233, 69, 96, 0.3);
+        }
+        .perf-bar-fill.green {
+            background: linear-gradient(90deg, var(--success), #3498db);
+            box-shadow: 0 0 10px rgba(0, 217, 165, 0.3);
+        }
+        .perf-bar-fill.purple {
+            background: linear-gradient(90deg, var(--purple), #a29bfe);
+            box-shadow: 0 0 10px rgba(108, 92, 231, 0.3);
+        }
+        @keyframes perfFill {
+            from { width: 0; }
+        }
+        .perf-value {
+            color: var(--text);
+            font-weight: 700;
+            font-size: 0.93rem;
+            min-width: 60px;
+            text-align: right;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* 特性列表 */
+        .feature-list li {
+            padding: 0.7rem 0;
+            padding-left: 2rem;
+            position: relative;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            font-size: 0.95rem;
+            color: var(--text-soft);
+            line-height: 1.7;
+            transition: all 0.3s;
+        }
+        .feature-list li::before {
+            content: '\f00c';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            position: absolute;
+            left: 0;
+            top: 0.85rem;
+            color: var(--primary);
+            font-size: 0.75rem;
+            width: 22px; height: 22px;
+            border-radius: 6px;
+            background: rgba(233, 69, 96, 0.12);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+        }
+        .feature-list li:hover {
+            color: var(--text);
+            transform: translateX(6px);
+        }
+        .feature-list li:hover::before {
+            transform: scale(1.15) rotate(8deg);
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            color: #fff;
+            box-shadow: 0 6px 16px rgba(233, 69, 96, 0.35);
+        }
+
+        /* 架构图增强 */
+        .arch-diagram {
+            background: linear-gradient(145deg, rgba(12, 12, 22, 0.85), rgba(8, 8, 16, 0.9));
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 24px;
+            padding: 2.8rem;
+            font-family: 'JetBrains Mono', monospace;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-grid"></div>
+    <div class="particles" id="particles"></div>
+
+    <!-- 返回顶部按钮 -->
+    <button class="back-to-top" id="backToTop" aria-label="返回顶部">
+        <i class="fa-solid fa-arrow-up"></i>
+    </button>
+
+    <!-- ========== 导航栏 ========== -->
+    <nav class="nav">
+        <div class="nav-inner">
+            <div class="nav-brand">
+                <div class="logo"><i class="fa-solid fa-dragon" style="color: #fff;"></i></div>
+                <span>大圣 · <small style="color:var(--text-muted); font-weight:500; font-size:0.85rem;">开发手册</small></span>
+            </div>
+            <div class="nav-links">
+                <a href="#overview"><i class="fa-solid fa-rocket"></i>概述</a>
+                <a href="#architecture"><i class="fa-solid fa-diagram-project"></i>架构</a>
+                <a href="#modules"><i class="fa-solid fa-layer-group"></i>模块</a>
+                <a href="#database"><i class="fa-solid fa-database"></i>数据库</a>
+                <a href="#rules"><i class="fa-solid fa-scroll"></i>规则引擎</a>
+                <a href="#tree"><i class="fa-solid fa-folder-tree"></i>目录</a>
+                <a href="#development"><i class="fa-solid fa-code"></i>开发</a>
+                <a href="#optimization"><i class="fa-solid fa-gauge-high"></i>优化</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- ========== 英雄区 ========== -->
+    <div class="hero">
+        <div class="hero-badge">
+            <i class="fa-solid fa-sparkles"></i>
+            v2.2.0 Documentation · 2026 Edition
+        </div>
+        <h1>
+            大圣 · <span class="highlight">快递物流</span><br>
+            出港账单结算系统
+        </h1>
+        <p class="hero-subtitle">
+            <span class="company">杭州喵喵至家网络有限公司</span><br>
+            高性能快递派费计算与多级结算平台 · 让每一笔账单精准无误
+        </p>
+
+        <div class="hero-meta">
+            <div class="hero-meta-item">
+                <div class="icon-circle"><i class="fa-solid fa-bolt-lightning"></i></div>
+                <div class="value">300万+</div>
+                <div class="label">日处理行数</div>
+            </div>
+            <div class="hero-meta-item">
+                <div class="icon-circle"><i class="fa-brands fa-python"></i></div>
+                <div class="value">PyQt5</div>
+                <div class="label">桌面框架</div>
+            </div>
+            <div class="hero-meta-item">
+                <div class="icon-circle"><i class="fa-solid fa-database"></i></div>
+                <div class="value">SQLite</div>
+                <div class="label">高性能存储</div>
+            </div>
+            <div class="hero-meta-item">
+                <div class="icon-circle"><i class="fa-solid fa-map-location-dot"></i></div>
+                <div class="value">14</div>
+                <div class="label">省份分区</div>
+            </div>
+        </div>
+
+        <div class="hero-cta">
+            <a href="#overview" class="btn-primary">
+                <i class="fa-solid fa-rocket"></i> 开始探索
+            </a>
+            <a href="#architecture" class="btn-secondary">
+                <i class="fa-solid fa-diagram-project"></i> 查看架构
+            </a>
+        </div>
+    </div>
+
+    <!-- ========== 01 项目概述 ========== -->
+    <section id="overview">
+        <div class="container">
+            <div class="section-header">
+                <div class="section-number">01 / OVERVIEW</div>
+                <h2 class="section-title"><i class="fa-solid fa-rocket"></i>项目概述</h2>
+                <p class="section-desc">
+                    一款面向快递行业的专业派费结算系统，支持大规模Excel数据导入、智能规则匹配、多级结算分配，为物流企业提供完整的财务结算解决方案。
+                </p>
+            </div>
+
+            <div class="card-grid">
+                <div class="card">
+                    <div class="card-icon"><i class="fa-solid fa-scale-balanced"></i></div>
+                    <h3><i class="fa-solid fa-sparkles" style="font-size:0.9rem; color:var(--accent);"></i>智能计费引擎</h3>
+                    <p>三层规则体系（客户级 → 区域级 → 全局级），支持14个省份分区，自动识别列名，精准计算派费。</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon green"><i class="fa-solid fa-money-bill-transfer"></i></div>
+                    <h3><i class="fa-solid fa-chart-pie" style="font-size:0.9rem; color:var(--success);"></i>多级结算</h3>
+                    <p>支持网点结算、快递员结算、承包区结算、月结客户结算，满足复杂业务场景的全面结算需求。</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon purple"><i class="fa-solid fa-gauge-high"></i></div>
+                    <h3><i class="fa-solid fa-bolt" style="font-size:0.9rem; color:var(--purple);"></i>高性能处理</h3>
+                    <p>多进程并行计算，300万行数据处理能力，SQLite WAL模式优化，毫秒级响应速度。</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon gold"><i class="fa-solid fa-shield-halved"></i></div>
+                    <h3><i class="fa-solid fa-lock" style="font-size:0.9rem; color:var(--accent);"></i>安全认证</h3>
+                    <p>PBKDF2密码哈希，30天免登录Token，账号到期管理，Windows凭证管理器集成。</p>
+                </div>
+            </div>
+
+            <div class="highlight-box">
+                <h4><i class="fa-solid fa-star"></i>核心能力矩阵</h4>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th><i class="fa-solid fa-layer-group"></i>功能模块</th>
+                                <th><i class="fa-solid fa-gears"></i>支持特性</th>
+                                <th><i class="fa-solid fa-bolt"></i>性能指标</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><i class="fa-solid fa-file-excel"></i> 数据导入</td>
+                                <td>xlsx/xls/csv、多Sheet合并、批量导入</td>
+                                <td>单文件最大支持100MB+</td>
+                            </tr>
+                            <tr>
+                                <td><i class="fa-solid fa-magnifying-glass-chart"></i> 规则匹配</td>
+                                <td>客户专属规则、区域规则、全局兜底规则</td>
+                                <td>O(1) 字典查找</td>
+                            </tr>
+                            <tr>
+                                <td><i class="fa-solid fa-coins"></i> 结算分配</td>
+                                <td>网点/快递员/承包区/月结客户</td>
+                                <td>万级记录秒级结算</td>
+                            </tr>
+                            <tr>
+                                <td><i class="fa-solid fa-triangle-exclamation"></i> 异常处理</td>
+                                <td>无效重量、无匹配规则、数据缺失</td>
+                                <td>自动标记 + 备注追溯</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ========== 02 系统架构 ========== -->
+    <section id="architecture">
+        <div class="container">
+            <div class="section-header">
+                <div class="section-number">02 / ARCHITECTURE</div>
+                <h2 class="section-title"><i class="fa-solid fa-diagram-project"></i>系统架构</h2>
+                <p class="section-desc">
+                    采用经典的分层架构设计，从上到下依次为：表现层（UI）→ 业务层（Services）→ 核心层（Core）→ 数据层（Models）。
+                </p>
+            </div>
+
+            <div class="arch-diagram">
+                <div class="arch-layer">
+                    <div class="arch-layer-label">
+                        <div style="display:flex; flex-direction:column; align-items:center; gap:10px;">
+                            <i class="fa-solid fa-desktop"></i>
+                            <div>PRESENTATION<br><small style="font-size:0.7rem; letter-spacing:1px;">UI 层</small></div>
+                        </div>
+                    </div>
+                    <div class="arch-components">
+                        <div class="arch-component highlight"><i class="fa-solid fa-user-shield"></i>login_window.py</div>
+                        <div class="arch-component highlight"><i class="fa-solid fa-window-maximize"></i>main_window.py</div>
+                    </div>
+                </div>
+                <div class="arch-layer">
+                    <div class="arch-layer-label" style="background: linear-gradient(135deg, rgba(0, 217, 165, 0.1), rgba(52, 152, 219, 0.05); color: var(--success); border-color: rgba(0, 217, 165, 0.2);">
+                        <div style="display:flex; flex-direction:column; align-items:center; gap:10px;">
+                            <i class="fa-solid fa-briefcase"></i>
+                            <div>SERVICES<br><small style="font-size:0.7rem; letter-spacing:1px;">业务层</small></div>
+                        </div>
+                    </div>
+                    <div class="arch-components">
+                        <div class="arch-component"><i class="fa-solid fa-calculator"></i>calculate_service.py</div>
+                        <div class="arch-component"><i class="fa-solid fa-file-csv"></i>excel_parser.py</div>
+                        <div class="arch-component"><i class="fa-solid fa-arrows-down-to-line"></i>column_matcher.py</div>
+                        <div class="arch-component"><i class="fa-solid fa-list-check"></i>rule_service.py</div>
+                        <div class="arch-component"><i class="fa-solid fa-file-export"></i>export_service.py</div>
+                    </div>
+                </div>
+                <div class="arch-layer">
+                    <div class="arch-layer-label" style="background: linear-gradient(135deg, rgba(243, 156, 18, 0.1), rgba(255, 193, 7, 0.05); color: var(--accent); border-color: rgba(243, 156, 18, 0.2);">
+                        <div style="display:flex; flex-direction:column; align-items:center; gap:10px;">
+                            <i class="fa-solid fa-microchip"></i>
+                            <div>CORE<br><small style="font-size:0.7rem; letter-spacing:1px;">核心层</small></div>
+                        </div>
+                    </div>
+                    <div class="arch-components">
+                        <div class="arch-component highlight" style="border-color:rgba(243,156,18,0.4); background:linear-gradient(135deg, rgba(243,156,18,0.15), rgba(255,193,7,0.08));"><i class="fa-solid fa-calculator"></i>fee_calculator.py</div>
+                        <div class="arch-component highlight" style="border-color:rgba(243,156,18,0.4); background:linear-gradient(135deg, rgba(243,156,18,0.15), rgba(255,193,7,0.08));"><i class="fa-solid fa-scale-unbalanced"></i>settlement.py</div>
+                    </div>
+                </div>
+                <div class="arch-layer">
+                    <div class="arch-layer-label" style="background: linear-gradient(135deg, rgba(108, 92, 231, 0.1), rgba(162, 155, 254, 0.05); color: var(--purple); border-color: rgba(108, 92, 231, 0.2);">
+                        <div style="display:flex; flex-direction:column; align-items:center; gap:10px;">
+                            <i class="fa-solid fa-database"></i>
+                            <div>MODELS<br><small style="font-size:0.7rem; letter-spacing:1px;">数据层</small></div>
+                        </div>
+                    </div>
+                    <div class="arch-components">
+                        <div class="arch-component"><i class="fa-solid fa-database"></i>database.py</div>
+                        <div class="arch-component"><i class="fa-solid fa-file-invoice"></i>fee_record.py</div>
+                        <div class="arch-component"><i class="fa-solid fa-file-lines"></i>fee_detail.py</div>
+                        <div class="arch-component"><i class="fa-solid fa-store"></i>station.py</div>
+                        <div class="arch-component"><i class="fa-solid fa-user"></i>courier.py</div>
+                        <div class="arch-component"><i class="fa-solid fa-user-shield"></i>user.py</div>
+                        <div class="arch-component"><i class="fa-solid fa-columns"></i>column_mapping.py</div>
+                        <div class="arch-component"><i class="fa-solid fa-percent"></i>commission_rule.py</div>
+                    </div>
+                </div>
+                <div class="arch-layer">
+                    <div class="arch-layer-label" style="background: linear-gradient(135deg, rgba(0, 217, 165, 0.1), rgba(233, 69, 96, 0.05); color: #66e0c2; border-color: rgba(0, 217, 165, 0.2);">
+                        <div style="display:flex; flex-direction:column; align-items:center; gap:10px;">
+                            <i class="fa-solid fa-hard-drive"></i>
+                            <div>DATA<br><small style="font-size:0.7rem; letter-spacing:1px;">存储层</small></div>
+                        </div>
+                    </div>
+                    <div class="arch-components">
+                        <div class="arch-component"><i class="fa-solid fa-database"></i>SQLite (WAL)</div>
+                        <div class="arch-component"><i class="fa-brands fa-js"></i>fee_rules.json</div>
+                        <div class="arch-component"><i class="fa-solid fa-gear"></i>default_settings.json</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card-grid" style="margin-top: 2.5rem;">
+                <div class="card">
+                    <div class="card-icon"><i class="fa-solid fa-desktop"></i></div>
+                    <h3><i class="fa-solid fa-window-restore" style="color:var(--primary); font-size:0.9rem;"></i>表现层 (UI)</h3>
+                    <p>基于PyQt5的桌面应用，包含登录窗口和主窗口。使用QThread实现后台任务，避免UI阻塞。支持文件预览、计算进度、结果展示、多级结算等功能。</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon green"><i class="fa-solid fa-screwdriver-wrench"></i></div>
+                    <h3><i class="fa-solid fa-briefcase" style="color:var(--success); font-size:0.9rem;"></i>业务层 (Services)</h3>
+                    <p>核心业务逻辑封装，包括：Excel解析、列名匹配、规则管理、费用计算、结算分配、数据导出。服务层依赖核心层完成计算。</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon gold"><i class="fa-solid fa-microchip"></i></div>
+                    <h3><i class="fa-solid fa-gears" style="color:var(--accent); font-size:0.9rem;"></i>核心层 (Core)</h3>
+                    <p>fee_calculator.py 实现三层规则匹配算法；settlement.py 实现多级结算引擎。两模块无UI依赖，可独立测试和复用。</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon purple"><i class="fa-solid fa-database"></i></div>
+                    <h3><i class="fa-solid fa-server" style="color:var(--purple); font-size:0.9rem;"></i>数据层 (Models)</h3>
+                    <p>基于SQLAlchemy ORM的数据库模型，包含完整的表结构定义。database.py实现连接池管理和SQLite优化配置。</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ========== 03 核心模块 ========== -->
+    <section id="modules">
+        <div class="container">
+            <div class="section-header">
+                <div class="section-number">03 / MODULES</div>
+                <h2 class="section-title"><i class="fa-solid fa-layer-group"></i>核心模块详解</h2>
+                <p class="section-desc">深入了解各核心模块的设计思路、API接口和使用方法。</p>
+            </div>
+
+            <!-- FeeCalculator -->
+            <div class="card" style="margin-bottom: 2.5rem;">
+                <h3 style="margin-bottom: 1.3rem; display:flex; align-items:center; gap:12px;">
+                    <span style="width:48px; height:48px; border-radius:14px; background:linear-gradient(135deg, rgba(233, 69, 96, 0.2), rgba(243, 156, 18, 0.1); color:var(--primary); display:inline-flex; align-items:center; justify-content:center; font-size:1.3rem;"><i class="fa-solid fa-calculator"></i></span>
+                    fee_calculator.py — 派费计算引擎
+                </h3>
+                <p style="margin-bottom: 1.8rem; color:var(--text-soft);">三层规则匹配算法，优先级：客户级(station) → 区域级(region) → 全局级(global)。支持重量进位模式和保底价。</p>
+
+                <div class="code-block">
+                    <div class="code-header">
+                        <div class="dots">
+                        <div class="dot red"></div><div class="dot yellow"></div><div class="dot green"></div>
+                        </div>
+                        <span class="filename"><i class="fa-brands fa-python"></i>fee_calculator.py</span>
+                    </div>
+                    <div class="code-content">
+<pre><span class="keyword">class</span> <span class="class">FeeCalculator</span>:
+    <span class="string">"""派费计算器 - 核心计算逻辑"""</span>
+
+    <span class="keyword">def</span> <span class="function">calculate</span>(<span class="self">self</span>, weight: <span class="class">float</span>, region: <span class="class">str</span> = <span class="string">""</span>) -> <span class="class">Dict</span>:
+        <span class="comment"># 1. 异常检查：无重量返回0</span>
+        <span class="keyword">if</span> weight <span class="keyword">is</span> <span class="keyword">None</span> <span class="keyword">or</span> weight <= <span class="number">0</span>:
+            <span class="keyword">return</span> {<span class="string">"fee"</span>: <span class="number">0.0</span>, <span class="string">"rule_name"</span>: <span class="string">"无效重量"</span>, <span class="string">"is_exception"</span>: <span class="keyword">True</span>}
+
+        <span class="comment"># 2. 匹配规则 - 三层规则优先级匹配</span>
+        rule = <span class="self">self</span>._match_rule(region)
+
+        <span class="comment"># 3. 计算派费 - 首重 + 续重</span>
+        first_weight = <span class="class">float</span>(rule.get(<span class="string">"first_weight"</span>, <span class="number">1.0</span>))
+        first_fee = <span class="class">float</span>(rule.get(<span class="string">"first_fee"</span>, <span class="number">5.0</span>))
+        continued_fee = <span class="class">float</span>(rule.get(<span class="string">"continued_fee"</span>, <span class="number">2.0</span>))
+        min_fee = <span class="class">float</span>(rule.get(<span class="string">"min_fee"</span>, first_fee))
+
+        <span class="keyword">if</span> weight <= first_weight:
+            fee = first_fee
+        <span class="keyword">else</span>:
+            continued_weight = weight - first_weight
+            fee = first_fee + continued_weight * continued_fee
+
+        <span class="comment"># 4. 保底价 - 确保每单最低收费</span>
+        fee = <span class="class">max</span>(fee, min_fee)
+
+        <span class="keyword">return</span> {<span class="string">"fee"</span>: fee, <span class="string">"rule_name"</span>: rule.get(<span class="string">"name"</span>), <span class="string">"is_exception"</span>: <span class="keyword">False</span>}</pre>
+                    </div>
+                </div>
+
+                <div class="highlight-box">
+                    <h4><i class="fa-solid fa-lightbulb"></i>规则匹配逻辑</h4>
+                    <ul class="feature-list">
+                        <li>按 <span class="inline-code">priority</span> 字段升序排列，数字越小优先级越高</li>
+                        <li>区域匹配支持关键词包含判断：规则关键词 in 区域文本</li>
+                        <li>未匹配任何规则时使用 <span class="inline-code">default_rule</span> 兜底</li>
+                        <li>保底价确保每单最低收费，避免极端低价</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Settlement -->
+            <div class="card" style="margin-bottom: 2.5rem;">
+                <h3 style="margin-bottom: 1.3rem; display:flex; align-items:center; gap:12px;">
+                    <span style="width:48px; height:48px; border-radius:14px; background:linear-gradient(135deg, rgba(0, 217, 165, 0.2), rgba(52, 152, 219, 0.15)); color:var(--success); display:inline-flex; align-items:center; justify-content:center; font-size:1.3rem;"><i class="fa-solid fa-scale-unbalanced"></i></span>
+                    settlement.py — 多级结算引擎
+                </h3>
+                <p style="margin-bottom: 1.8rem; color:var(--text-soft);">支持四种结算维度：网点、快递员、承包区、月结客户。每种结算自动计算分成比例和收益。</p>
+
+                <div class="tabs">
+                    <button class="tab active" onclick="showTab(this, 'tab-station')"><i class="fa-solid fa-store"></i>网点结算</button>
+                    <button class="tab" onclick="showTab(this, 'tab-courier')"><i class="fa-solid fa-user"></i>快递员结算</button>
+                    <button class="tab" onclick="showTab(this, 'tab-contract')"><i class="fa-solid fa-handshake"></i>承包区结算</button>
+                    <button class="tab" onclick="showTab(this, 'tab-monthly')"><i class="fa-solid fa-calendar-days"></i>月结客户</button>
+                </div>
+
+                <div id="tab-station" class="tab-content active">
+                    <div class="code-block">
+                        <div class="code-header">
+                            <span class="filename"><i class="fa-brands fa-python"></i>settlement.py - 网点结算</span>
+                        </div>
+                        <div class="code-content">
+<pre><span class="keyword">def</span> <span class="function">calculate_station_settlement</span>(<span class="self">self</span>, details: <span class="class">List</span>) -> <span class="class">List</span>[<span class="class">Dict</span>]:
+    <span class="string">"""按网点汇总结算"""</span>
+    <span class="comment"># 分组key：网点编码 + 网点名称</span>
+    station_map = <span class="class">defaultdict</span>(...)
+
+    <span class="keyword">for</span> d <span class="keyword">in</span> details:
+        <span class="keyword">if</span> d.is_exception: <span class="keyword">continue</span>
+        key = (d.station_code, d.station_name)
+        station_map[key][<span class="string">"total_fee"</span>] += d.calculated_fee
+        station_map[key][<span class="string">"order_count"</span>] += <span class="number">1</span>
+
+    <span class="comment"># 分成比例：默认15%</span>
+    commission_rate = <span class="class">Decimal</span>(<span class="string">"0.15"</span>)
+    commission = info[<span class="string">"total_fee"</span>] * commission_rate
+
+    <span class="keyword">return</span> [{
+        <span class="string">"station_income"</span>: float(commission),
+        <span class="string">"company_income"</span>: float(info[<span class="string">"total_fee"</span>] - commission)
+    }]</pre>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="tab-courier" class="tab-content">
+                    <div class="highlight-box">
+                        <h4><i class="fa-solid fa-user"></i>快递员结算</h4>
+                        <p style="color:var(--text-soft);">快递员结算默认提成比例 <span class="inline-code">80%</span>，剩余20%归网点。支持按快递员分组统计订单量和派费总额。</p>
+                    </div>
+                </div>
+
+                <div id="tab-contract" class="tab-content">
+                    <div class="highlight-box">
+                        <h4><i class="fa-solid fa-handshake"></i>承包区结算</h4>
+                        <p style="color:var(--text-soft);">承包区按网点编码前3位分组，默认分成比例 <span class="inline-code">10%</span>。用于大区层面的汇总统计。</p>
+                    </div>
+                </div>
+
+                <div id="tab-monthly" class="tab-content">
+                    <div class="highlight-box">
+                        <h4><i class="fa-solid fa-calendar-days"></i>月结客户结算</h4>
+                        <p style="color:var(--text-soft);">月结客户按"客户编码+客户名称"分组，包含代收货款(COD)统计。支持大客户月结账单导出。</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CalculateService -->
+            <div class="card" style="margin-bottom: 2.5rem;">
+                <h3 style="margin-bottom: 1.3rem; display:flex; align-items:center; gap:12px;">
+                    <span style="width:48px; height:48px; border-radius:14px; background:linear-gradient(135deg, rgba(108, 92, 231, 0.2), rgba(162, 155, 254, 0.15)); color:var(--purple); display:inline-flex; align-items:center; justify-content:center; font-size:1.3rem;"><i class="fa-solid fa-bolt"></i></span>
+                    calculate_service.py — 高性能计算服务
+                </h3>
+                <p style="color:var(--text-soft);">支持300万行级别的数据处理，采用多进程并行计算和批量入库策略。</p>
+
+                <div class="flow" style="margin-top: 2rem;">
+                    <div class="flow-item">
+                        <i class="fa-solid fa-file-excel"></i>
+                        <strong>读取 Excel</strong>
+                        <small>流式读取</small>
+                    </div>
+                    <div class="flow-arrow"><i class="fa-solid fa-arrow-right"></i></div>
+                    <div class="flow-item">
+                        <i class="fa-solid fa-arrows-down-to-line"></i>
+                        <strong>列名匹配</strong>
+                        <small>自动识别</small>
+                    </div>
+                    <div class="flow-arrow"><i class="fa-solid fa-arrow-right"></i></div>
+                    <div class="flow-item">
+                        <i class="fa-solid fa-book"></i>
+                        <strong>规则索引</strong>
+                        <small>O(1) 命中</small>
+                    </div>
+                    <div class="flow-arrow"><i class="fa-solid fa-arrow-right"></i></div>
+                    <div class="flow-item" style="border-color: rgba(233, 69, 96, 0.4);">
+                        <i class="fa-solid fa-gears"></i>
+                        <strong>多进程计算</strong>
+                        <small>多核加速</small>
+                    </div>
+                    <div class="flow-arrow"><i class="fa-solid fa-arrow-right"></i></div>
+                    <div class="flow-item">
+                        <i class="fa-solid fa-database"></i>
+                        <strong>批量入库</strong>
+                        <small>25000行/批</small>
+                    </div>
+                </div>
+
+                <div class="code-block">
+                    <div class="code-header">
+                        <span class="filename"><i class="fa-solid fa-gears"></i>性能参数配置</span>
+                    </div>
+                    <div class="code-content">
+<pre><span class="comment"># 性能调优参数 - 经过生产环境验证</span>
+BATCH_SIZE = <span class="number">25000</span>                 <span class="comment"># 每批计算 / 入库行数 - 性能测试最优值</span>
+CHUNK_SIZE_FOR_MP = <span class="number">200000</span>         <span class="comment"># 多进程每进程chunk大小</span>
+MIN_ROWS_FOR_MULTIPROCESS = <span class="number">100000</span> <span class="comment"># 小于10万行不启用多进程</span>
+
+<span class="comment"># 规则索引构建 - 三层 O(1) 命中</span>
+_STATION_CODE_MAP = {}   <span class="comment"># 网点编码 → 规则列表</span>
+_STATION_NAME_MAP = {}   <span class="comment"># 网点名称 → 规则列表</span>
+_REGION_MAP = {}         <span class="comment"># 区域关键词 → 规则列表</span>
+_GLOBAL_RULES = []       <span class="comment"># 全局规则兜底</span></pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RuleService -->
+            <div class="card">
+                <h3 style="margin-bottom: 1.3rem; display:flex; align-items:center; gap:12px;">
+                    <span style="width:48px; height:48px; border-radius:14px; background:linear-gradient(135deg, rgba(243, 156, 18, 0.2), rgba(255, 193, 7, 0.15)); color:var(--accent); display:inline-flex; align-items:center; justify-content:center; font-size:1.3rem;"><i class="fa-solid fa-list-check"></i></span>
+                    rule_service.py — 规则管理服务
+                </h3>
+                <p style="color:var(--text-soft);">支持三层规则体系的配置、导入、导出。提供Excel模板批量导入客户专属规则，支持活动加价机制。</p>
+
+                <div class="code-block">
+                    <div class="code-header">
+                        <span class="filename"><i class="fa-brands fa-python"></i>规则定义</span>
+                    </div>
+                    <div class="code-content">
+<pre><span class="keyword">class</span> <span class="class">Rule</span>:
+    <span class="string">"""单条计费规则"""</span>
+    <span class="keyword">def</span> <span class="function">matches</span>(<span class="self">self</span>, region=<span class="string">""</span>, station_code=<span class="string">""</span>, weight=<span class="number">0.0</span>) -> <span class="class">bool</span>:
+        <span class="comment"># 网点匹配 - 客户专属规则优先</span>
+        <span class="keyword">if</span> <span class="self">self</span>.stations.strip():
+            station_list = [s.strip() <span class="keyword">for</span> s <span class="keyword">in</span> <span class="self">self</span>.stations.split(<span class="string">","</span>)]
+            <span class="keyword">if</span> station_code <span class="keyword">not</span> station_list: <span class="keyword">return</span> <span class="keyword">False</span>
+
+        <span class="comment"># 区域匹配（包含任一关键词即命中）</span>
+        region_match = <span class="keyword">any</span>(k <span class="keyword">in</span> region <span class="keyword">for</span> k <span class="keyword">in</span> keywords)
+
+        <span class="comment"># 重量匹配 - 重量区间过滤</span>
+        weight_match = <span class="self">self</span>.min_weight <= weight <= <span class="self">self</span>.max_weight
+
+        <span class="keyword">return</span> region_match <span class="keyword">and</span> weight_match</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ========== 04 数据库 ========== -->
+    <section id="database">
+        <div class="container">
+            <div class="section-header">
+                <div class="section-number">04 / DATABASE</div>
+                <h2 class="section-title"><i class="fa-solid fa-database"></i>数据库结构</h2>
+                <p class="section-desc">基于SQLite的本地数据库，采用WAL模式优化并发性能，支持大数据量处理。</p>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon"><i class="fa-solid fa-bolt"></i></div>
+                    <div class="stat-value">WAL</div>
+                    <div class="stat-label">Write-Ahead Log</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon" style="background:linear-gradient(135deg, rgba(0,217,165,0.2), rgba(52,152,219,0.15)); color:var(--success);"><i class="fa-solid fa-memory"></i></div>
+                    <div class="stat-value">200MB</div>
+                    <div class="stat-label">缓存大小</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon" style="background:linear-gradient(135deg, rgba(108,92,231,0.2), rgba(162,155,254,0.15)); color:var(--purple);"><i class="fa-solid fa-microchip"></i></div>
+                    <div class="stat-value">1GB</div>
+                    <div class="stat-label">mmap 大小</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon" style="background:linear-gradient(135deg, rgba(243,156,18,0.2), rgba(255,193,7,0.15)); color:var(--accent);"><i class="fa-regular fa-clock"></i></div>
+                    <div class="stat-value">120s</div>
+                    <div class="stat-label">连接超时</div>
+                </div>
+            </div>
+
+            <h3 style="margin: 2.5rem 0 1.5rem; font-size:1.4rem;"><i class="fa-solid fa-table" style="color:var(--primary); margin-right:10px;"></i>核心表结构</h3>
+
+            <div class="tabs">
+                <button class="tab active" onclick="showTab(this, 'tab-fee-record')"><i class="fa-solid fa-file-invoice"></i>fee_records</button>
+                <button class="tab" onclick="showTab(this, 'tab-fee-detail')"><i class="fa-solid fa-file-lines"></i>fee_details</button>
+                <button class="tab" onclick="showTab(this, 'tab-stations')"><i class="fa-solid fa-store"></i>stations</button>
+                <button class="tab" onclick="showTab(this, 'tab-users')"><i class="fa-solid fa-user-shield"></i>users</button>
+            </div>
+
+            <div id="tab-fee-record" class="tab-content active">
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr><th><i class="fa-solid fa-key"></i>字段</th><th><i class="fa-solid fa-code"></i>类型</th><th><i class="fa-solid fa-circle-info"></i>说明</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>id</td><td><span class="type-badge number">INTEGER PK</span></td><td>主键，自增</td></tr>
+                            <tr><td>file_name</td><td><span class="type-badge string">VARCHAR</span></td><td>原始文件名</td></tr>
+                            <tr><td>file_path</td><td><span class="type-badge string">VARCHAR</span></td><td>文件存储路径</td></tr>
+                            <tr><td>total_rows</td><td><span class="type-badge number">INTEGER</span></td><td>数据总行数</td></tr>
+                            <tr><td>success_rows</td><td><span class="type-badge number">INTEGER</span></td><td>成功计算行数</td></tr>
+                            <tr><td>error_rows</td><td><span class="type-badge number">INTEGER</span></td><td>异常行数</td></tr>
+                            <tr><td>total_fee</td><td><span class="type-badge number">DECIMAL</span></td><td>派费总额</td></tr>
+                            <tr><td>status</td><td><span class="type-badge string">VARCHAR</span></td><td>状态：pending/success/failed</td></tr>
+                            <tr><td>created_at</td><td><span class="type-badge string">DATETIME</span></td><td>创建时间</td></tr>
+                            <tr><td>completed_at</td><td><span class="type-badge string">DATETIME</span></td><td>完成时间</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="tab-fee-detail" class="tab-content">
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr><th><i class="fa-solid fa-key"></i>字段</th><th><i class="fa-solid fa-code"></i>类型</th><th><i class="fa-solid fa-circle-info"></i>说明</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>id</td><td><span class="type-badge number">INTEGER PK</span></td><td>主键，自增</td></tr>
+                            <tr><td>record_id</td><td><span class="type-badge number">INTEGER FK</span></td><td>关联计算记录</td></tr>
+                            <tr><td>row_index</td><td><span class="type-badge number">INTEGER</span></td><td>原始Excel行号</td></tr>
+                            <tr><td>tracking_no</td><td><span class="type-badge string">VARCHAR</span></td><td>快递单号</td></tr>
+                            <tr><td>station_code</td><td><span class="type-badge string">VARCHAR</span></td><td>网点编码</td></tr>
+                            <tr><td>station_name</td><td><span class="type-badge string">VARCHAR</span></td><td>网点名称</td></tr>
+                            <tr><td>courier_code</td><td><span class="type-badge string">VARCHAR</span></td><td>快递员编码</td></tr>
+                            <tr><td>region_name</td><td><span class="type-badge string">VARCHAR</span></td><td>区域名称</td></tr>
+                            <tr><td>weight</td><td><span class="type-badge number">DECIMAL</span></td><td>重量(kg)</td></tr>
+                            <tr><td>quantity</td><td><span class="type-badge number">INTEGER</span></td><td>件数</td></tr>
+                            <tr><td>original_data</td><td><span class="type-badge json">JSON</span></td><td>原始行数据</td></tr>
+                            <tr><td>calculated_fee</td><td><span class="type-badge number">DECIMAL</span></td><td>计算派费</td></tr>
+                            <tr><td>rule_name</td><td><span class="type-badge string">VARCHAR</span></td><td>应用规则名</td></tr>
+                            <tr><td>is_exception</td><td><span class="type-badge boolean">BOOLEAN</span></td><td>是否异常</td></tr>
+                            <tr><td>exception_type</td><td><span class="type-badge string">VARCHAR</span></td><td>异常类型</td></tr>
+                            <tr><td>remark</td><td><span class="type-badge string">VARCHAR</span></td><td>备注</td></tr>
+                            <tr><td>created_at</td><td><span class="type-badge string">DATETIME</span></td><td>创建时间</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="tab-stations" class="tab-content">
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr><th><i class="fa-solid fa-key"></i>字段</th><th><i class="fa-solid fa-code"></i>类型</th><th><i class="fa-solid fa-circle-info"></i>说明</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>id</td><td><span class="type-badge number">INTEGER PK</span></td><td>主键</td></tr>
+                            <tr><td>station_code</td><td><span class="type-badge string">VARCHAR</span></td><td>网点编码(唯一)</td></tr>
+                            <tr><td>station_name</td><td><span class="type-badge string">VARCHAR</span></td><td>网点名称</td></tr>
+                            <tr><td>parent_code</td><td><span class="type-badge string">VARCHAR</span></td><td>上级网点编码</td></tr>
+                            <tr><td>commission_rate</td><td><span class="type-badge number">DECIMAL</span></td><td>分成比例(0~1)</td></tr>
+                            <tr><td>is_active</td><td><span class="type-badge boolean">BOOLEAN</span></td><td>是否启用</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="tab-users" class="tab-content">
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr><th><i class="fa-solid fa-key"></i>字段</th><th><i class="fa-solid fa-code"></i>类型</th><th><i class="fa-solid fa-circle-info"></i>说明</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>id</td><td><span class="type-badge number">INTEGER PK</span></td><td>主键</td></tr>
+                            <tr><td>username</td><td><span class="type-badge string">VARCHAR</span></td><td>用户名(唯一)</td></tr>
+                            <tr><td>password_hash</td><td><span class="type-badge string">VARCHAR</span></td><td>密码哈希(PBKDF2)</td></tr>
+                            <tr><td>salt</td><td><span class="type-badge string">VARCHAR</span></td><td>盐值</td></tr>
+                            <tr><td>role</td><td><span class="type-badge string">VARCHAR</span></td><td>角色：user/admin</td></tr>
+                            <tr><td>is_active</td><td><span class="type-badge boolean">INTEGER</span></td><td>是否启用</td></tr>
+                            <tr><td>last_login</td><td><span class="type-badge string">DATETIME</span></td><td>最后登录</td></tr>
+                            <tr><td>created_at</td><td><span class="type-badge string">DATETIME</span></td><td>创建时间</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="highlight-box" style="margin-top: 2.5rem;">
+                <h4><i class="fa-solid fa-gears"></i>SQLite 优化配置</h4>
+                <div class="code-block" style="margin: 1.2rem 0 0;">
+                    <div class="code-content">
+<pre><span class="keyword">def</span> <span class="function">_apply_optimization_pragmas</span>(connection):
+    <span class="comment"># WAL模式 - 写更快、读不阻塞写</span>
+    cursor.execute(<span class="string">"PRAGMA journal_mode = WAL"</span>)
+    <span class="comment"># 同步策略 NORMAL - 比FULL快5-10倍</span>
+    cursor.execute(<span class="string">"PRAGMA synchronous = NORMAL"</span>)
+    <span class="comment"># 页面缓存 200MB</span>
+    cursor.execute(<span class="string">"PRAGMA cache_size = -200000"</span>)
+    <span class="comment"># 临时表放内存</span>
+    cursor.execute(<span class="string">"PRAGMA temp_store = MEMORY"</span>)
+    <span class="comment"># mmap 1GB 内存映射</span>
+    cursor.execute(<span class="string">"PRAGMA mmap_size = 1073741824"</span>)</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ========== 05 规则引擎 ========== -->
+    <section id="rules">
+        <div class="container">
+            <div class="section-header">
+                <div class="section-number">05 / RULES ENGINE</div>
+                <h2 class="section-title"><i class="fa-solid fa-scroll"></i>规则引擎详解</h2>
+                <p class="section-desc">三层规则体系 + 活动加价机制，支持灵活的业务配置和规则动态更新。</p>
+            </div>
+
+            <div class="highlight-box" style="margin-bottom: 3rem;">
+                <h4><i class="fa-solid fa-layer-group"></i>三层规则匹配流程图</h4>
+                <div class="rule-layers">
+                    <div class="rule-layer rule-layer-1">
+                        <div class="rule-layer-icon"><i class="fa-solid fa-crown"></i></div>
+                        <div class="rule-layer-content">
+                            <strong>客户专属规则 (Station)</strong>
+                            <span>最高优先级 · 按网点编码精确匹配 · 客户定制派费</span>
+                        </div>
+                    </div>
+                    <div style="color:var(--text-muted); font-size:1.5rem;"><i class="fa-solid fa-angles-down"></i></div>
+                    <div class="rule-layer rule-layer-2">
+                        <div class="rule-layer-icon"><i class="fa-solid fa-map-location-dot"></i></div>
+                        <div class="rule-layer-content">
+                            <strong>区域规则 (Region)</strong>
+                            <span>中级优先级 · 按省份/城市关键词匹配 · 14个省份分区</span>
+                        </div>
+                    </div>
+                    <div style="color:var(--text-muted); font-size:1.5rem;"><i class="fa-solid fa-angles-down"></i></div>
+                    <div class="rule-layer rule-layer-3">
+                        <div class="rule-layer-icon"><i class="fa-solid fa-shield-halved"></i></div>
+                        <div class="rule-layer-content">
+                            <strong>全局规则 (Global)</strong>
+                            <span>兜底规则 · 未匹配任何规则时自动应用 · 全局统一收费</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <h3 style="margin: 2.5rem 0 1.5rem; font-size:1.4rem;"><i class="fa-solid fa-map-location-dot" style="color:var(--success); margin-right:10px;"></i>14省份分区费率表</h3>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr><th><i class="fa-solid fa-layer-group"></i>分区</th><th><i class="fa-solid fa-earth-asia"></i>省份</th><th><i class="fa-solid fa-coins"></i>首重费</th><th><i class="fa-solid fa-plus-minus"></i>续重费</th><th><i class="fa-solid fa-arrow-down"></i>保底</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td><span style="background:rgba(233,69,96,0.15); color:#fff; padding:3px 10px; border-radius:6px; font-size:0.8rem;">一区</span></td><td>浙江</td><td>2.5</td><td>1.0</td><td>2.5</td></tr>
+                        <tr><td><span style="background:rgba(243,156,18,0.15); color:#ffd76e; padding:3px 10px; border-radius:6px; font-size:0.8rem;">二区</span></td><td>江苏、安徽</td><td>3.1</td><td>1.0</td><td>3.1</td></tr>
+                        <tr><td><span style="background:rgba(0,217,165,0.15); color:#66e0c2; padding:3px 10px; border-radius:6px; font-size:0.8rem;">三区</span></td><td>天津、河北、山东、山西、河南、湖北、湖南、江西、福建、广东</td><td>3.1</td><td>1.5</td><td>3.1</td></tr>
+                        <tr><td><span style="background:rgba(52,152,219,0.15); color:#7fb8e3; padding:3px 10px; border-radius:6px; font-size:0.8rem;">四区</span></td><td>上海</td><td>3.1</td><td>1.5</td><td>3.1</td></tr>
+                        <tr><td><span style="background:rgba(155,89,182,0.15); color:#c5a0d8; padding:3px 10px; border-radius:6px; font-size:0.8rem;">五区</span></td><td>北京</td><td>3.1</td><td>1.5</td><td>3.1</td></tr>
+                        <tr><td><span style="background:rgba(230,126,34,0.15); color:#e8b88a; padding:3px 10px; border-radius:6px; font-size:0.8rem;">六区</span></td><td>重庆</td><td>3.6</td><td>2.0</td><td>3.6</td></tr>
+                        <tr><td><span style="background:rgba(26,188,156,0.15); color:#89e2d0; padding:3px 10px; border-radius:6px; font-size:0.8rem;">七区</span></td><td>广西</td><td>3.1</td><td>2.0</td><td>3.1</td></tr>
+                        <tr><td><span style="background:rgba(52,73,94,0.3); color:#aac1d4; padding:3px 10px; border-radius:6px; font-size:0.8rem;">八区</span></td><td>黑龙江、吉林、辽宁、陕西、内蒙古</td><td>3.6</td><td>1.5</td><td>3.6</td></tr>
+                        <tr><td><span style="background:rgba(192,57,43,0.15); color:#e8a090; padding:3px 10px; border-radius:6px; font-size:0.8rem;">九区</span></td><td>四川、贵州、云南</td><td>3.6</td><td>2.0</td><td>3.6</td></tr>
+                        <tr><td><span style="background:rgba(127,140,161,0.15); color:#c8cfd9; padding:3px 10px; border-radius:6px; font-size:0.8rem;">十区</span></td><td>甘肃、宁夏、青海</td><td>3.6</td><td>2.0</td><td>3.6</td></tr>
+                        <tr><td><span style="background:rgba(155,89,182,0.2); color:#d5a0e8; padding:3px 10px; border-radius:6px; font-size:0.8rem;">十一区</span></td><td>新疆</td><td>3.6</td><td>2.0</td><td>3.6</td></tr>
+                        <tr><td><span style="background:rgba(46,204,113,0.2); color:#a8e6c0; padding:3px 10px; border-radius:6px; font-size:0.8rem;">十二区</span></td><td>西藏</td><td>5.0</td><td>2.5</td><td>5.0</td></tr>
+                        <tr><td><span style="background:rgba(52,152,219,0.2); color:#a5d5ee; padding:3px 10px; border-radius:6px; font-size:0.8rem;">十三区</span></td><td>海南</td><td>4.0</td><td>1.8</td><td>4.0</td></tr>
+                        <tr><td><span style="background:rgba(233,69,96,0.2); color:#ffb0c0; padding:3px 10px; border-radius:6px; font-size:0.8rem;">十四区</span></td><td>香港、澳门、台湾</td><td>30.0</td><td>20.0</td><td>30.0</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <h3 style="margin: 2.5rem 0 1.5rem; font-size:1.4rem;"><i class="fa-brands fa-js" style="color:var(--warning); margin-right:10px;"></i>规则 JSON 结构示例</h3>
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="filename"><i class="fa-brands fa-js"></i>fee_rules.json</span>
+                </div>
+                <div class="code-content">
+<pre>{
+  <span class="string">"version"</span>: <span class="string">"2.2"</span>,
+  <span class="string">"description"</span>: <span class="string">"三层规则体系 + 活动加价"</span>,
+  <span class="string">"rules"</span>: [
+    {
+      <span class="string">"name"</span>: <span class="string">"蜜丝婷 - 北京"</span>,
+      <span class="string">"regions"</span>: <span class="string">"北京"</span>,
+      <span class="string">"stations"</span>: <span class="string">"C001, 蜜丝婷"</span>,
+      <span class="string">"min_weight"</span>: <span class="number">0.0</span>,
+      <span class="string">"max_weight"</span>: <span class="number">999.0</span>,
+      <span class="string">"first_fee"</span>: <span class="number">4.0</span>,
+      <span class="string">"continued_fee"</span>: <span class="number">1.8</span>,
+      <span class="string">"min_fee"</span>: <span class="number">2.0</span>,
+      <span class="string">"rule_type"</span>: <span class="string">"station"</span>,
+      <span class="string">"continued_unit"</span>: <span class="string">"kg"</span>
+    }
+  ],
+  <span class="string">"promotion_rules"</span>: []
+}</pre>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ========== 06 文件树 ========== -->
+    <section id="tree">
+        <div class="container">
+            <div class="section-header">
+                <div class="section-number">06 / FILE STRUCTURE</div>
+                <h2 class="section-title"><i class="fa-solid fa-folder-tree"></i>项目文件结构</h2>
+                <p class="section-desc">清晰的分层目录结构，便于维护和二次开发。</p>
+            </div>
+
+            <div class="arch-diagram">
+                <div class="tree" style="font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; line-height: 2.2;">
+                    <div style="margin-bottom: 0.5rem; color: var(--text); font-weight: 600; padding-left: 0.5rem;">
+                        <i class="fa-solid fa-folder" style="color:var(--accent); margin-right: 10px;"></i>excelbest/
+                    </div>
+
+                    <div class="tree-item" style="padding-left: 1.5rem;">
+                        <i class="fa-solid fa-folder" style="color:var(--accent); margin-right: 10px;"></i>app/
+                    </div>
+                    <div class="tree-item" style="padding-left: 3rem;">
+                        <i class="fa-solid fa-folder" style="color:var(--accent); margin-right: 10px;"></i>core/
+                    </div>
+                    <div class="tree-item" style="padding-left: 4.5rem;">
+                        <i class="fa-brands fa-python" style="color:var(--success); margin-right: 10px;"></i>__init__.py
+                    </div>
+                    <div class="tree-item" style="padding-left: 4.5rem; color:#ffd76e;">
+                        <i class="fa-solid fa-star" style="color:var(--primary); margin-right: 10px;"></i><strong>fee_calculator.py</strong>
+                        <span style="color: var(--text-muted); font-size: 0.85rem; margin-left: 1rem;">← 派费计算引擎</span>
+                    </div>
+                    <div class="tree-item" style="padding-left: 4.5rem; color:#ffd76e;">
+                        <i class="fa-solid fa-star" style="color:var(--primary); margin-right: 10px;"></i><strong>settlement.py</strong>
+                        <span style="color: var(--text-muted); font-size: 0.85rem; margin-left: 1rem;">← 多级结算引擎</span>
+                    </div>
+
+                    <div class="tree-item" style="padding-left: 3rem;">
+                        <i class="fa-solid fa-folder" style="color:var(--accent); margin-right: 10px;"></i>models/
+                    </div>
+                    <div class="tree-item" style="padding-left: 4.5rem;">
+                        <i class="fa-brands fa-python" style="color:var(--success); margin-right: 10px;"></i>__init__.py
+                    </div>
+                    <div class="tree-item" style="padding-left: 4.5rem;">
+                        <i class="fa-brands fa-python" style="color:var(--success); margin-right: 10px;"></i>database.py
+                        <span style="color: var(--text-muted); font-size: 0.85rem; margin-left: 1rem;">← SQLAlchemy 配置 + WAL优化</span>
+                    </div>
+                    <div class="tree-item" style="padding-left: 4.5rem;">
+                        <i class="fa-brands fa-python" style="color:var(--success); margin-right: 10px;"></i>fee_record.py
+                        <span style="color: var(--text-muted); font-size: 0.85rem; margin-left: 1rem;">← 计算记录表</span>
+                    </div>
+                    <div class="tree-item" style="padding-left: 4.5rem;">
+                        <i class="fa-brands fa-python" style="color:var(--success); margin-right: 10px;"></i>fee_detail.py
+                        <span style="color: var(--text-muted); font-size: 0.85rem; margin-left: 1rem;">← 派费明细表</span>
+                    </div>
+                    <div class="tree-item" style="padding-left: 4.5rem;">
+                        <i class="fa-brands fa-python" style="color:var(--success); margin-right: 10px;"></i>station.py
+                        <span style="color: var(--text-muted); font-size: 0.85rem; margin-left: 1rem;">← 网点表</span>
+                    </div>
+                    <div class="tree-item" style="padding-left: 4.5rem;">
+                        <i class="fa-brands fa-python" style="color:var(--success); margin-right: 10px;"></i>courier.py
+                        <span style="color: var(--text-muted); font-size: 0.85rem; margin-left: 1rem;">← 快递员表</span>
+                    </div>
+                    <div class="tree-item" style="padding-left: 4.5rem;">
+                        <i class="fa-brands fa-python" style="color:var(--success); margin-right: 10px;"></i>user.py
+                        <span style="color: var(--text-muted); font-size: 0.85rem; margin-left: 1rem;">← 用户认证表</span>
+                    </div>
+                    <div class="tree-item" style="padding-left: 4.5rem;">
+                        <i class="fa-brands fa-python" style="color:var(--success); margin-right: 10px;"></i>column_mapping.py
+                        <span style="color: var(--text-muted); font-size: 0.85rem; margin-left: 1rem;">← 列名映射表</span>
+                    </div>
+                    <div class="tree-item" style="padding-left: 4.5rem;">
+                        <i class="fa-brands fa-python" style="color:var(--success); margin-right: 10px;"></i>commission_rule.py
+                        <span style="color: var(--text-muted); font-size: 0.85rem; margin-left: 1rem;">← 分成规则表</span>
+                    </div>
+                    <div class="tree-item" style="padding-left: 3rem;">
+                        <i class="fa-solid fa-folder" style="color:var(--accent); margin-right: 10px;"></i>services/
+                    </div>
+                    <div class="tree-item" style="padding-left: 4.5rem;">
+                        <i class="fa-brands fa-python" style="color:var(--success); margin-right: 10px;"></i>__init__.py
+                    </div>
+                    <div class="tree-item" style="padding-left: 4.5rem; color:#ffd76e;">
+                        <i class="fa-solid fa-star" style="color:var(--primary); margin-right: 10px;"></i><strong>calculate_service.py</strong>
+                        <span style="color: var(--text-muted); font-size: 0.85rem; margin-left: 1rem;">← 高性能计算服务</span>
+                    </div>
+                    <div class="tree-item" style="padding-left: 4.5rem;">
+                        <i class="fa-brands fa-python" style="color:var(--success); margin-right: 10px;"></i>excel_parser.py
+                        <span style="color: var(--text-muted); font-size: 0.85rem; margin-left: 1rem;">← Excel 解析</span>
+                    </div>
+                    <div class="tree-item" style="padding-left: 4.5rem;">
+                        <i class="fa-brands fa-python" style="color:var(--success); margin-right: 10px;"></i>column_matcher.py
+                        <span style="color: var(--text-muted); font-size: 0.85rem; margin-left: 1rem;">← 列名自动匹配</span>
+                    </div>
+                    <div class="tree-item" style="padding-left: 4.5rem; color:#ffd76e;">
+                        <i class="fa-solid fa-star" style="color:var(--primary); margin-right: 10px;"></i><strong>rule_service.py</strong>
+                        <span style="color: var(--text-muted); font-size: 0.85rem; margin-left: 1rem;">← 规则管理服务</span>
+                    </div>
+                    <div class="tree-item" style="padding-left: 4.5rem;">
+                        <i class="fa-brands fa-python" style="color:var(--success); margin-right: 10px;"></i>export_service.py
+                        <span style="color: var(--text-muted); font-size: 0.85rem; margin-left: 1rem;">← 导出服务</span>
+                    </div>
+
+                    <div class="tree-item" style="padding-left: 3rem;">
+                        <i class="fa-solid fa-folder" style="color:var(--accent); margin-right: 10px;"></i>ui/
+                    </div>
+                    <div class="tree-item" style="padding-left: 4.5rem;">
+                        <i class="fa-brands fa-python" style="color:var(--success); margin-right: 10px;"></i>__init__.py
+                    </div>
+                    <div class="tree-item" style="padding-left: 4.5rem;">
+                        <i class="fa-brands fa-python" style="color:var(--success); margin-right: 10px;"></i>login_window.py
+                        <span style="color: var(--text-muted); font-size: 0.85rem; margin-left: 1rem;">← 登录窗口</span>
+                    </div>
+                    <div class="tree-item" style="padding-left: 4.5rem; color:#ffd76e;">
+                        <i class="fa-solid fa-star" style="color:var(--primary); margin-right: 10px;"></i><strong>main_window.py</strong>
+                        <span style="color: var(--text-muted); font-size: 0.85rem; margin-left: 1rem;">← 主窗口</span>
+                    </div>
+
+                    <div class="tree-item" style="padding-left: 1.5rem;">
+                        <i class="fa-solid fa-folder" style="color:var(--accent); margin-right: 10px;"></i>data/
+                    </div>
+                    <div class="tree-item" style="padding-left: 3rem;">
+                        <i class="fa-solid fa-folder" style="color:var(--accent); margin-right: 10px;"></i>config/
+                    </div>
+                    <div class="tree-item" style="padding-left: 4.5rem;">
+                        <i class="fa-brands fa-js" style="color:var(--warning); margin-right: 10px;"></i>fee_rules.json
+                        <span style="color: var(--text-muted); font-size: 0.85rem; margin-left: 1rem;">← 计费规则配置</span>
+                    </div>
+                    <div class="tree-item" style="padding-left: 4.5rem;">
+                        <i class="fa-brands fa-js" style="color:var(--warning); margin-right: 10px;"></i>default_settings.json
+                    </div>
+
+                    <div class="tree-item" style="padding-left: 1.5rem; color:#ffd76e; margin-top:0.5rem;">
+                        <i class="fa-solid fa-star" style="color:var(--primary); margin-right: 10px;"></i><strong>main.py</strong>
+                        <span style="color: var(--text-muted); font-size: 0.85rem; margin-left: 1rem;">← 应用入口</span>
+                    </div>
+                    <div class="tree-item" style="padding-left: 1.5rem;">
+                        <i class="fa-solid fa-file" style="color:var(--text-muted); margin-right: 10px;"></i>requirements.txt
+                    </div>
+                    <div class="tree-item" style="padding-left: 1.5rem;">
+                        <i class="fa-solid fa-file-lines" style="color:var(--text-muted); margin-right: 10px;"></i>README.md
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ========== 07 二次开发指南 ========== -->
+    <section id="development">
+        <div class="container">
+            <div class="section-header">
+                <div class="section-number">07 / DEVELOPMENT</div>
+                <h2 class="section-title"><i class="fa-solid fa-code"></i>二次开发指南</h2>
+                <p class="section-desc">为开发者和二次开发团队提供的详细开发指南。</p>
+            </div>
+
+            <div class="card-grid">
+                <div class="card">
+                    <div class="card-icon"><i class="fa-solid fa-terminal"></i></div>
+                    <h3><i class="fa-solid fa-hammer" style="color:var(--primary); font-size:0.9rem;"></i>开发环境搭建</h3>
+                    <div class="code-block" style="margin-top: 1rem; border-radius:12px;">
+                        <div class="code-content" style="padding: 1.2rem;">
+<pre style="font-size:0.85rem;"><span class="comment"># 1. 克隆项目</span>
+git clone &lt;repo&gt;
+cd excelbest
+
+<span class="comment"># 2. 创建虚拟环境</span>
+python -m venv venv
+.\venv\Scripts\activate
+
+<span class="comment"># 3. 安装依赖</span>
+pip install -r requirements.txt
+
+<span class="comment"># 4. 运行应用</span>
+python main.py</pre>
+                        </div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-icon green"><i class="fa-solid fa-box"></i></div>
+                    <h3><i class="fa-solid fa-cube" style="color:var(--success); font-size:0.9rem;"></i>依赖清单</h3>
+                    <ul class="feature-list" style="margin-top: 1rem;">
+                        <li><span class="inline-code">PyQt5 == 5.15.9</span> - 桌面UI框架</li>
+                        <li><span class="inline-code">pandas == 1.5.3</span> - Excel解析</li>
+                        <li><span class="inline-code">openpyxl == 3.1.2</span> - Excel读写</li>
+                        <li><span class="inline-code">SQLAlchemy == 2.0.23</span> - ORM</li>
+                        <li><span class="inline-code">PyInstaller == 5.13.0</span> - 打包exe</li>
+                    </ul>
+                </div>
+            </div>
+
+            <h3 style="margin: 2.5rem 0 1.5rem; font-size:1.4rem;"><i class="fa-solid fa-plus-circle" style="color:var(--success); margin-right:10px;"></i>添加新结算维度</h3>
+            <div class="card">
+                <p style="color:var(--text-soft);">在 <span class="inline-code">settlement.py</span> 中添加新方法即可扩展结算维度。</p>
+                <div class="code-block" style="margin-top: 1.2rem; border-radius:14px;">
+                    <div class="code-header">
+                        <span class="filename"><i class="fa-brands fa-python"></i>添加新结算维度模板</span>
+                    </div>
+                    <div class="code-content">
+<pre><span class="keyword">def</span> <span class="function">calculate_xxx_settlement</span>(<span class="self">self</span>, details: <span class="class">List</span>) -> <span class="class">List</span>[<span class="class">Dict</span>]:
+    <span class="string">"""按 XXX 汇总结算"""</span>
+    xxx_map = <span class="class">defaultdict</span>(<span class="keyword">lambda</span>: {
+        <span class="string">"total_fee"</span>: <span class="class">Decimal</span>(<span class="string">"0"</span>),
+        <span class="string">"order_count"</span>: <span class="number">0</span>
+    })
+
+    <span class="keyword">for</span> d <span class="keyword">in</span> details:
+        <span class="keyword">if</span> d.is_exception: <span class="keyword">continue</span>
+        <span class="comment"># 你的分组逻辑 - 根据字段分组</span>
+        key = d.xxx_field
+        xxx_map[key][<span class="string">"total_fee"</span>] += <span class="class">Decimal</span>(<span class="function">str</span>(d.calculated_fee <span class="keyword">or</span> <span class="number">0</span>))
+        xxx_map[key][<span class="string">"order_count"</span>] += <span class="number">1</span>
+
+    <span class="comment"># 转换结果 - 整理输出格式</span>
+    result = []
+    <span class="keyword">for</span> k, v <span class="keyword">in</span> xxx_map.items():
+        result.append({<span class="string">"xxx_key"</span>: k, <span class="string">"total_fee"</span>: float(v[<span class="string">"total_fee"</span>]), ...})
+
+    <span class="keyword">return</span> result</pre>
+                    </div>
+                </div>
+            </div>
+
+            <h3 style="margin: 2.5rem 0 1.5rem; font-size:1.4rem;"><i class="fa-solid fa-plus-circle" style="color:var(--accent); margin-right:10px;"></i>添加新规则类型</h3>
+            <div class="card">
+                <p style="color:var(--text-soft);">步骤1：在 <span class="inline-code">rule_service.py</span> 的 <span class="inline-code">Rule</span> 类中添加规则类型。</p>
+                <div class="code-block" style="margin-top: 1.2rem;">
+                    <div class="code-content">
+<pre><span class="comment"># 在 Rule 类 matches 方法中添加</span>
+<span class="keyword">if</span> <span class="self">self</span>.rule_type == <span class="string">"xxx"</span>:
+    <span class="comment"># 你的匹配逻辑 - 根据业务规则判断是否命中</span>
+    <span class="keyword">return</span> condition</pre>
+                    </div>
+                </div>
+                <p style="color:var(--text-soft); margin-top: 1.2rem;">步骤2：在 <span class="inline-code">calculate_service.py</span> 的 <span class="inline-code">match_rule_fast</span> 函数中添加匹配分支。</p>
+                <div class="code-block" style="margin-top: 1.2rem;">
+                    <div class="code-content">
+<pre><span class="comment"># 4) 客户专属后，添加新匹配逻辑分支</span>
+<span class="keyword">if</span> <span class="self">self</span>.rule_type == <span class="string">"xxx"</span>:
+    xxx_rules = _XXX_MAP.get(xxx_key)
+    <span class="keyword">if</span> xxx_rules:
+        result = _calc_fee_from_rules(weight, xxx_rules)
+        <span class="keyword">if</span> result: <span class="keyword">return</span> result[0], result[1], <span class="keyword">False</span></pre>
+                    </div>
+                </div>
+            </div>
+
+            <h3 style="margin: 2.5rem 0 1.5rem; font-size:1.4rem;"><i class="fa-solid fa-box-archive" style="color:var(--purple); margin-right:10px;"></i>打包发布</h3>
+            <div class="card">
+                <div class="code-block">
+                    <div class="code-header">
+                        <span class="filename"><i class="fa-solid fa-terminal"></i>Windows 打包命令</span>
+                    </div>
+                    <div class="code-content">
+<pre><span class="comment"># 使用 PyInstaller 打包为单文件 exe</span>
+pyinstaller --onefile --windowed --name=<span class="string">"大圣.快递物流出港帐单结算系统"</span> main.py
+
+<span class="comment"># 或使用项目中的打包脚本</span>
+.\build_windows.bat</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ========== 08 性能优化 ========== -->
+    <section id="optimization">
+        <div class="container">
+            <div class="section-header">
+                <div class="section-number">08 / OPTIMIZATION</div>
+                <h2 class="section-title"><i class="fa-solid fa-gauge-high"></i>性能优化建议</h2>
+                <p class="section-desc">针对大规模数据处理的深度优化指南，经过生产环境验证。</p>
+            </div>
+
+            <!-- 四卡板块 -->
+            <div class="card-grid">
+                <div class="card">
+                    <div class="card-icon"><i class="fa-solid fa-rocket"></i></div>
+                    <h3><i class="fa-solid fa-bolt" style="color:var(--primary); font-size:0.95rem;"></i>计算性能优化</h3>
+                    <ul class="feature-list">
+                        <li>规则索引预构建，避免重复扫描</li>
+                        <li>多进程并行，充分利用 CPU 多核</li>
+                        <li>批量入库，25000 行/批 最优阈值</li>
+                        <li>延迟加载大文件，内存流式处理</li>
+                        <li>数据对象扁平化，减少 GC 压力</li>
+                    </ul>
+                </div>
+
+                <div class="card">
+                    <div class="card-icon green"><i class="fa-solid fa-database"></i></div>
+                    <h3><i class="fa-solid fa-server" style="color:var(--success); font-size:0.95rem;"></i>数据库优化</h3>
+                    <ul class="feature-list">
+                        <li>SQLite WAL 模式：读写分离，无阻塞</li>
+                        <li>PRAGMA synchronous = NORMAL 平衡性能与安全</li>
+                        <li>cache_size = -200000，约 200MB 页缓存</li>
+                        <li>mmap_size = 1GB，内存映射加速读写</li>
+                        <li>使用事务批量写入，减少 IO 次数</li>
+                    </ul>
+                </div>
+
+                <div class="card">
+                    <div class="card-icon purple"><i class="fa-solid fa-code-branch"></i></div>
+                    <h3><i class="fa-solid fa-flask" style="color:var(--purple); font-size:0.95rem;"></i>代码结构建议</h3>
+                    <ul class="feature-list">
+                        <li>核心计算模块与 UI 解耦，便于测试</li>
+                        <li>fee_calculator / settlement 纯函数化</li>
+                        <li>配置文件与代码分离，易于二次开发</li>
+                        <li>添加单元测试，覆盖关键规则分支</li>
+                        <li>使用类型注解，提升 IDE 提示体验</li>
+                    </ul>
+                </div>
+
+                <div class="card">
+                    <div class="card-icon gold"><i class="fa-solid fa-shield-halved"></i></div>
+                    <h3><i class="fa-solid fa-user-shield" style="color:var(--accent); font-size:0.95rem;"></i>安全与稳定</h3>
+                    <ul class="feature-list">
+                        <li>账号密码使用 PBKDF2 + salt 哈希存储</li>
+                        <li>异常数据标记而非丢弃，便于追溯</li>
+                        <li>关键操作加锁防止并发写入冲突</li>
+                        <li>定期备份 SQLite 文件，提供恢复入口</li>
+                        <li>登录 Token 过期失效，免登录更安全</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- 性能指标条 -->
+            <div class="highlight-box" style="margin-top: 3rem;">
+                <h4><i class="fa-solid fa-chart-column"></i>关键性能指标</h4>
+                <div style="margin-top: 1.5rem;">
+                    <div class="perf-row">
+                        <span class="perf-label"><i class="fa-solid fa-bolt"></i>计算速度</span>
+                        <div class="perf-bar"><div class="perf-bar-fill" style="width: 95%;"></div></div>
+                        <span class="perf-value">极快</span>
+                    </div>
+                    <div class="perf-row">
+                        <span class="perf-label"><i class="fa-solid fa-gauge-high"></i>吞吐量</span>
+                        <div class="perf-bar"><div class="perf-bar-fill green" style="width: 90%;"></div></div>
+                        <span class="perf-value">300万行</span>
+                    </div>
+                    <div class="perf-row">
+                        <span class="perf-label"><i class="fa-solid fa-microchip"></i>CPU 利用率</span>
+                        <div class="perf-bar"><div class="perf-bar-fill purple" style="width: 85%;"></div></div>
+                        <span class="perf-value">多核并行</span>
+                    </div>
+                    <div class="perf-row">
+                        <span class="perf-label"><i class="fa-solid fa-memory"></i>内存占用</span>
+                        <div class="perf-bar"><div class="perf-bar-fill" style="width: 55%;"></div></div>
+                        <span class="perf-value">可控</span>
+                    </div>
+                    <div class="perf-row">
+                        <span class="perf-label"><i class="fa-solid fa-database"></i>写入效率</span>
+                        <div class="perf-bar"><div class="perf-bar-fill green" style="width: 92%;"></div></div>
+                        <span class="perf-value">25K/批</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 终极建议 -->
+            <div class="card-grid" style="margin-top: 2.5rem;">
+                <div class="card" style="grid-column: 1 / -1;">
+                    <div class="card-icon"><i class="fa-solid fa-star"></i></div>
+                    <h3><i class="fa-solid fa-lightbulb" style="color:var(--accent); font-size:0.95rem;"></i>二次开发者必读 · 扩展思路</h3>
+                    <p style="margin-top: 1rem;">
+                        本系统的架构从设计之初就考虑了可扩展性。以下是推荐的扩展方向与落地建议，帮助你在不破坏核心稳定性的前提下构建个性化的业务能力。
+                    </p>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.5rem; margin-top: 2rem;">
+                        <div style="background: rgba(233, 69, 96, 0.06); border: 1px solid rgba(233, 69, 96, 0.2); border-radius: 16px; padding: 1.5rem;">
+                            <div style="width:44px; height:44px; border-radius:12px; background: linear-gradient(135deg, rgba(233,69,96,0.25), rgba(243,156,18,0.15)); display:flex; align-items:center; justify-content:center; margin-bottom:1rem;">
+                                <i class="fa-solid fa-file-excel" style="color:var(--primary); font-size:1.2rem;"></i>
+                            </div>
+                            <h4 style="font-size:1.05rem; font-weight:700; margin-bottom:0.6rem; color:var(--text);">接入更多数据源</h4>
+                            <p style="font-size:0.9rem; color:var(--text-soft); line-height:1.7;">支持 CSV / TXT / XLSB / Google Sheets 等，抽象 Parser 接口即可无缝接入。</p>
+                        </div>
+                        <div style="background: rgba(0, 217, 165, 0.06); border: 1px solid rgba(0, 217, 165, 0.2); border-radius: 16px; padding: 1.5rem;">
+                            <div style="width:44px; height:44px; border-radius:12px; background: linear-gradient(135deg, rgba(0,217,165,0.25), rgba(52,152,219,0.15)); display:flex; align-items:center; justify-content:center; margin-bottom:1rem;">
+                                <i class="fa-solid fa-sliders" style="color:var(--success); font-size:1.2rem;"></i>
+                            </div>
+                            <h4 style="font-size:1.05rem; font-weight:700; margin-bottom:0.6rem; color:var(--text);">可视化规则编辑器</h4>
+                            <p style="font-size:0.9rem; color:var(--text-soft); line-height:1.7;">为非技术用户提供拖拽式规则配置，所见即所得，替代手工编辑 JSON。</p>
+                        </div>
+                        <div style="background: rgba(108, 92, 231, 0.06); border: 1px solid rgba(108, 92, 231, 0.2); border-radius: 16px; padding: 1.5rem;">
+                            <div style="width:44px; height:44px; border-radius:12px; background: linear-gradient(135deg, rgba(108,92,231,0.25), rgba(162,155,254,0.15)); display:flex; align-items:center; justify-content:center; margin-bottom:1rem;">
+                                <i class="fa-solid fa-chart-pie" style="color:var(--purple); font-size:1.2rem;"></i>
+                            </div>
+                            <h4 style="font-size:1.05rem; font-weight:700; margin-bottom:0.6rem; color:var(--text);">数据分析看板</h4>
+                            <p style="font-size:0.9rem; color:var(--text-soft); line-height:1.7;">基于历史结算数据，生成按客户/区域的趋势图表，辅助经营决策。</p>
+                        </div>
+                        <div style="background: rgba(243, 156, 18, 0.06); border: 1px solid rgba(243, 156, 18, 0.2); border-radius: 16px; padding: 1.5rem;">
+                            <div style="width:44px; height:44px; border-radius:12px; background: linear-gradient(135deg, rgba(243,156,18,0.25), rgba(255,193,7,0.15)); display:flex; align-items:center; justify-content:center; margin-bottom:1rem;">
+                                <i class="fa-solid fa-cloud-arrow-up" style="color:var(--accent); font-size:1.2rem;"></i>
+                            </div>
+                            <h4 style="font-size:1.05rem; font-weight:700; margin-bottom:0.6rem; color:var(--text);">云端协同与同步</h4>
+                            <p style="font-size:0.9rem; color:var(--text-soft); line-height:1.7;">规则配置云同步、多终端共享数据，支持团队协作与权限管理。</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 结尾提示卡 -->
+            <div class="highlight-box" style="margin-top: 3rem; text-align:center;">
+                <h4 style="justify-content:center; display:inline-flex; margin-bottom:1.2rem;"><i class="fa-solid fa-handshake"></i>与开发者同行</h4>
+                <p style="color:var(--text-soft); max-width: 720px; margin: 0 auto; line-height: 1.9;">
+                    大圣派费结算系统不仅是一个工具，更是一个开放的计算平台。我们鼓励你基于它构建自己的业务能力，如果你有新的想法、问题或改进建议，欢迎将你的实践沉淀为代码、文档或反馈。
+                </p>
+                <div style="margin-top: 2rem; display:flex; gap:1rem; justify-content:center; flex-wrap:wrap;">
+                    <span style="display:inline-flex; align-items:center; gap:8px; padding:10px 18px; border-radius: 50px; background: rgba(233,69,96,0.1); border:1px solid rgba(233,69,96,0.25); color:var(--primary); font-size:0.9rem; font-weight:600;">
+                        <i class="fa-solid fa-code"></i> PyQt5 / SQLite
+                    </span>
+                    <span style="display:inline-flex; align-items:center; gap:8px; padding:10px 18px; border-radius: 50px; background: rgba(0,217,165,0.1); border:1px solid rgba(0,217,165,0.25); color:var(--success); font-size:0.9rem; font-weight:600;">
+                        <i class="fa-solid fa-bolt"></i> 高性能计算
+                    </span>
+                    <span style="display:inline-flex; align-items:center; gap:8px; padding:10px 18px; border-radius: 50px; background: rgba(108,92,231,0.1); border:1px solid rgba(108,92,231,0.25); color:var(--purple); font-size:0.9rem; font-weight:600;">
+                        <i class="fa-solid fa-layer-group"></i> 分层架构
+                    </span>
+                    <span style="display:inline-flex; align-items:center; gap:8px; padding:10px 18px; border-radius: 50px; background: rgba(243,156,18,0.1); border:1px solid rgba(243,156,18,0.25); color:var(--accent); font-size:0.9rem; font-weight:600;">
+                        <i class="fa-solid fa-plug"></i> 开放扩展
+                    </span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ========== 页脚 ========== -->
+    <footer>
+        <div class="container">
+            <div class="footer-logo">
+                <i class="fa-solid fa-dragon"></i>
+            </div>
+            <h3>大圣 · 快递物流出港账单结算系统</h3>
+            <p>高性能计算 · 多级结算 · 开放扩展 · 由 杭州喵喵至家网络有限公司 出品</p>
+            <div class="social-icons">
+                <a href="#overview" title="首页"><i class="fa-solid fa-house"></i></a>
+                <a href="#architecture" title="架构"><i class="fa-solid fa-diagram-project"></i></a>
+                <a href="#modules" title="模块"><i class="fa-solid fa-layer-group"></i></a>
+                <a href="#database" title="数据库"><i class="fa-solid fa-database"></i></a>
+                <a href="#rules" title="规则引擎"><i class="fa-solid fa-scroll"></i></a>
+                <a href="#development" title="开发指南"><i class="fa-solid fa-code"></i></a>
+                <a href="#optimization" title="优化建议"><i class="fa-solid fa-gauge-high"></i></a>
+            </div>
+            <div class="footer-bottom">
+                <p style="display:flex; align-items:center; justify-content:center; gap:12px;">
+                    <i class="fa-regular fa-copyright" style="color:var(--primary);"></i>
+                    <span>2024 - 2026 大圣派费结算系统 · Made with</span>
+                    <i class="fa-solid fa-heart" style="color:var(--primary); animation: pulse 1.5s ease-in-out infinite;"></i>
+                    <span>for the logistics industry</span>
+                </p>
+                <p style="margin-top: 0.6rem; font-size: 0.8rem;">
+                    版本 v2.2.0 · 开发手册 · HTML5 + CSS3 + Font Awesome 6
+                </p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- ========== JavaScript 交互 ========== -->
+    <script>
+        // ======= 粒子动画 =======
+        (function initParticles() {
+            var container = document.getElementById('particles');
+            if (!container) return;
+            var count = 25;
+            for (var i = 0; i < count; i++) {
+                var p = document.createElement('div');
+                p.className = 'particle';
+                var size = 2 + Math.random() * 5;
+                p.style.width = size + 'px';
+                p.style.height = size + 'px';
+                p.style.left = Math.random() * 100 + '%';
+                p.style.bottom = -20 + 'px';
+                p.style.animationDuration = (15 + Math.random() * 25) + 's';
+                p.style.animationDelay = (Math.random() * 10) + 's';
+                p.style.opacity = (0.3 + Math.random() * 0.5).toString();
+                var colors = ['rgba(233,69,96,0.6)', 'rgba(243,156,18,0.6)', 'rgba(0,217,165,0.55)', 'rgba(108,92,231,0.55)'];
+                p.style.background = 'radial-gradient(circle, ' + colors[i % colors.length] + ', transparent 70%)';
+                container.appendChild(p);
+            }
+        })();
+
+        // ======= Tab 切换 =======
+        function showTab(btn, targetId) {
+            if (!btn || !targetId) return;
+            // 切换同级 tabs 的 active
+            var tabs = btn.parentNode.querySelectorAll('.tab');
+            for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
+            btn.classList.add('active');
+
+            // 找到对应的 tab-content 容器
+            var container = btn.parentNode;
+            var contents = container.parentNode ? container.parentNode.querySelectorAll('.tab-content') : document.querySelectorAll('.tab-content');
+            for (var j = 0; j < contents.length; j++) contents[j].classList.remove('active');
+
+            var target = document.getElementById(targetId);
+            if (target) target.classList.add('active');
+        }
+
+        // ======= 返回顶部 =======
+        (function initBackToTop() {
+            var btn = document.getElementById('backToTop');
+            if (!btn) return;
+            window.addEventListener('scroll', function() {
+                if (window.pageYOffset > 400) btn.classList.add('visible');
+                else btn.classList.remove('visible');
+            }, { passive: true });
+            btn.addEventListener('click', function() {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            });
+        })();
+
+        // ======= 平滑滚动（锚点导航） =======
+        document.querySelectorAll('a[href^="#"]').forEach(function(anchor) {
+            anchor.addEventListener('click', function(e) {
+                var href = this.getAttribute('href');
+                if (!href || href === '#') return;
+                var target = document.querySelector(href);
+                if (target) {
+                    e.preventDefault();
+                    var top = target.getBoundingClientRect().top + window.pageYOffset - 80;
+                    window.scrollTo({ top: top, behavior: 'smooth' });
+                }
+            });
+        });
+
+        // ======= 滚动渐显动画 =======
+        (function initReveal() {
+            var items = document.querySelectorAll('section, .card, .hero-meta-item');
+            if (!('IntersectionObserver' in window)) {
+                items.forEach(function(el) { el.classList.add('visible'); });
+                return;
+            }
+            var observer = new IntersectionObserver(function(entries) {
+                entries.forEach(function(entry) {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('visible');
+                        observer.unobserve(entry.target);
+                    }
+                });
+            }, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
+            items.forEach(function(el) {
+                el.classList.add('reveal');
+                observer.observe(el);
+            });
+        })();
+
+        // ======= 导航链接激活态 =======
+        (function initNavActive() {
+            var links = document.querySelectorAll('.nav-links a');
+            var sections = [];
+            links.forEach(function(a) {
+                var id = a.getAttribute('href');
+                if (id && id.length > 1) {
+                    var sec = document.querySelector(id);
+                    if (sec) sections.push({ id: id, el: sec, link: a });
+                }
+            });
+            if (!sections.length) return;
+            window.addEventListener('scroll', function() {
+                var y = window.pageYOffset + 200;
+                var current = sections[0];
+                for (var i = 0; i < sections.length; i++) {
+                    if (sections[i].el.offsetTop <= y) current = sections[i];
+                }
+                sections.forEach(function(s) { s.link.classList.remove('active'); });
+                if (current) current.link.classList.add('active');
+            }, { passive: true });
+        })();
+    </script>
+</body>
+</html>

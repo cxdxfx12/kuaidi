@@ -36,8 +36,8 @@ COLOR_BG_BOTTOM = "#8b6239"
 
 
 def _icon_path():
-    """登录窗口图标（.ico 格式）"""
-    p = os.path.join(get_resource_path("data", "icons"), "dasheng.ico")
+    """登录窗口图标（猴子 PNG 格式）"""
+    p = os.path.join(get_resource_path("data", "icons"), "monkey-icon.png")
     if os.path.exists(p):
         return p
     return ""
@@ -45,7 +45,7 @@ def _icon_path():
 
 def _logo_png_path():
     """猴子 logo（PNG 格式）"""
-    p = os.path.join(get_resource_path("data", "icons"), "dasheng_200.png")
+    p = os.path.join(get_resource_path("data", "icons"), "monkey-icon.png")
     if os.path.exists(p):
         return p
     p2 = os.path.join(get_resource_path("data", "icons"), "monkey-icon.png")

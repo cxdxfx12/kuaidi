@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import (
     QMessageBox, QStatusBar, QTextEdit, QGroupBox,
     QHeaderView, QAbstractItemView, QLineEdit, QSizePolicy,
     QComboBox, QInputDialog, QRadioButton, QScrollArea,
-    QFrame
+    QFrame, QDialog, QProgressDialog, QApplication
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt5.QtGui import QFont, QIcon
@@ -251,6 +251,7 @@ class ExportWorker(QThread):
     """导出 Excel 后台线程 - 避免大数据量导出时 UI 未响应"""
     finished = pyqtSignal(str)  # 成功：返回文件路径
     error = pyqtSignal(str)
+    progress = pyqtSignal(int, str)  # 进度：百分比 + 消息
 
     def __init__(self, record_id: int, target_file_path: str):
         super().__init__()
@@ -261,7 +262,13 @@ class ExportWorker(QThread):
         try:
             from app.services.export_service import ExportService
             service = ExportService()
-            file_path = service.export_details(self.record_id, self.target_file_path)
+            # 进度回调：发射 progress 信号，由 UI 线程更新浮层
+            def on_progress(pct, msg):
+                self.progress.emit(pct, msg)
+
+            file_path = service.export_details(
+                self.record_id, self.target_file_path, progress_callback=on_progress
+            )
             self.finished.emit(file_path)
         except Exception as e:
             import traceback
@@ -326,6 +333,58 @@ class ExportSettlementWorker(QThread):
                 ])
             wb.save(self.target_file_path)
             self.finished.emit(self.target_file_path)
+        except Exception as e:
+            import traceback
+            self.error.emit(str(e) + "\n" + traceback.format_exc())
+
+
+class ExportMultiWorker(QThread):
+    """多文件导出后台线程"""
+    finished = pyqtSignal(list)  # 成功：返回文件路径列表
+    error = pyqtSignal(str)
+    progress = pyqtSignal(int, str)
+
+    def __init__(self, record_ids: list, export_dir: str):
+        super().__init__()
+        self.record_ids = record_ids
+        self.export_dir = export_dir
+
+    def run(self):
+        try:
+            from app.services.export_service import ExportService
+            service = ExportService()
+            def on_progress(pct, msg):
+                self.progress.emit(pct, msg)
+            exported_files = service.export_multiple_records(
+                self.record_ids, self.export_dir, progress_callback=on_progress
+            )
+            self.finished.emit(exported_files)
+        except Exception as e:
+            import traceback
+            self.error.emit(str(e) + "\n" + traceback.format_exc())
+
+
+class ExportMergedWorker(QThread):
+    """合并导出后台线程"""
+    finished = pyqtSignal(list)  # 成功：返回文件路径列表
+    error = pyqtSignal(str)
+    progress = pyqtSignal(int, str)
+
+    def __init__(self, record_ids: list, export_dir: str):
+        super().__init__()
+        self.record_ids = record_ids
+        self.export_dir = export_dir
+
+    def run(self):
+        try:
+            from app.services.export_service import ExportService
+            service = ExportService()
+            def on_progress(pct, msg):
+                self.progress.emit(pct, msg)
+            exported_files = service.export_merged_records(
+                self.record_ids, self.export_dir, progress_callback=on_progress
+            )
+            self.finished.emit(exported_files)
         except Exception as e:
             import traceback
             self.error.emit(str(e) + "\n" + traceback.format_exc())
@@ -410,7 +469,7 @@ class MainWindow(QMainWindow):
 
         # 窗口图标（猴子图标）
         try:
-            icon_file = os.path.join(get_resource_path("data", "icons"), "dasheng.ico")
+            icon_file = os.path.join(get_resource_path("data", "icons"), "monkey-icon.png")
             if os.path.exists(icon_file):
                 self.setWindowIcon(QIcon(icon_file))
         except Exception:
@@ -429,6 +488,24 @@ class MainWindow(QMainWindow):
         self._init_menu_bar()
 
         self._load_default_settings()
+
+    def resizeEvent(self, event):
+        """窗口大小变化时，重新居中导出浮层"""
+        super().resizeEvent(event)
+        if self._export_overlay is not None and self._export_overlay.isVisible():
+            geo = self.geometry()
+            cx = geo.x() + geo.width() // 2
+            cy = geo.y() + geo.height() // 2
+            self._export_overlay.move(cx - 220, cy - 130)
+
+    def moveEvent(self, event):
+        """窗口移动时，导出浮层跟随居中"""
+        super().moveEvent(event)
+        if self._export_overlay is not None and self._export_overlay.isVisible():
+            geo = self.geometry()
+            cx = geo.x() + geo.width() // 2
+            cy = geo.y() + geo.height() // 2
+            self._export_overlay.move(cx - 220, cy - 130)
 
     def _init_menu_bar(self):
         """顶部菜单栏（账号相关）：修改密码 / 退出登录 / 退出软件"""
@@ -483,67 +560,439 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "数据库错误", f"数据库初始化失败：{e}")
 
     def _init_ui(self):
-        """初始化界面"""
+        """初始化界面 - 液态玻璃 (Liquid Glass) 风格"""
+        self.setStyleSheet("""
+            /* ========== 全局 ========== */
+            QMainWindow { background: #eef2f7; }
+            QWidget {
+                background: #eef2f7;
+                color: #1e293b;
+                font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI";
+                font-size: 11px;
+            }
+
+            /* ========== 顶栏品牌条：液态玻璃渐变 ========== */
+            #brand_bar {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #4f46e5, stop:0.5 #6366f1, stop:1 #4f46e5);
+                border-bottom: 1px solid #c7d2fe;
+            }
+            #brand_title {
+                color: white;
+                font-size: 16px;
+                font-weight: 500;
+                padding-left: 4px;
+            }
+            #brand_sub {
+                color: #e0e7ff;
+                font-size: 12px;
+            }
+
+            /* ========== Tab页：液态玻璃胶囊 ========== */
+            QTabWidget::pane {
+                border: none;
+                background: #eef2f7;
+                margin-top: 0px;
+            }
+            QTabBar::tab {
+                background: #f1f5f9;
+                color: #64748b;
+                padding: 8px 20px;
+                margin-right: 4px;
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                font-size: 11px;
+                font-weight: 500;
+            }
+            QTabBar::tab:selected {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #ffffff, stop:1 #eef2ff);
+                color: #4f46e5;
+                border: 1px solid #c7d2fe;
+            }
+            QTabBar::tab:hover:!selected {
+                background: #ffffff;
+                color: #4f46e5;
+                border: 1px solid #cbd5e1;
+            }
+
+            /* ========== 卡片容器：玻璃卡片 ========== */
+            QGroupBox {
+                background: #ffffff;
+                border: 1px solid #e2e8f0;
+                border-radius: 10px;
+                padding: 10px 12px;
+                margin-top: 10px;
+                font-size: 11px;
+                font-weight: 500;
+                color: #334155;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                subcontrol-position: top left;
+                left: 12px;
+                padding: 0 10px;
+                background: #ffffff;
+                color: #4f46e5;
+            }
+
+            /* ========== 主按钮：玻璃态胶囊 ========== */
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #6366f1, stop:1 #4f46e5);
+                color: white;
+                border: none;
+                padding: 6px 14px;
+                border-radius: 8px;
+                font-size: 11px;
+                font-weight: 500;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #818cf8, stop:1 #6366f1);
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #4f46e5, stop:1 #4338ca);
+            }
+            QPushButton:disabled {
+                background: #cbd5e1;
+                color: #94a3b8;
+            }
+
+            /* ========== 绿色主按钮（开始计算） ========== */
+            QPushButton#primary_green {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #34d399, stop:1 #10b981);
+                padding: 10px;
+                font-size: 12px;
+                font-weight: 500;
+                border-radius: 8px;
+            }
+            QPushButton#primary_green:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #6ee7b7, stop:1 #34d399);
+            }
+
+            /* ========== 次要按钮（描边） ========== */
+            QPushButton#secondary {
+                background: #ffffff;
+                color: #475569;
+                border: 1px solid #cbd5e1;
+                padding: 6px 14px;
+                border-radius: 8px;
+                font-size: 11px;
+            }
+            QPushButton#secondary:hover {
+                background: #eef2ff;
+                color: #4f46e5;
+                border-color: #a5b4fc;
+            }
+
+            /* ========== 红色按钮 ========== */
+            QPushButton#danger {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #f87171, stop:1 #ef4444);
+                color: white;
+                padding: 6px 14px;
+                border-radius: 8px;
+                font-size: 11px;
+            }
+            QPushButton#danger:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #fca5a5, stop:1 #f87171);
+            }
+
+            /* ========== 标签 ========== */
+            QLabel { color: #334155; font-size: 11px; }
+            QLabel#hint {
+                color: #64748b;
+                padding: 10px 12px;
+                background: #f8fafc;
+                border: 1px dashed #cbd5e1;
+                border-radius: 8px;
+                font-size: 11px;
+            }
+            QLabel#success_hint {
+                color: #047857;
+                padding: 10px 12px;
+                background: #ecfdf5;
+                border: 1px solid #a7f3d0;
+                border-radius: 8px;
+                font-size: 11px;
+            }
+
+            /* ========== 输入框 / 表格 ========== */
+            QLineEdit, QTextEdit, QTableWidget {
+                background: #ffffff;
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                color: #1e293b;
+                padding: 3px 8px;
+                selection-background-color: #e0e7ff;
+                selection-color: #1e293b;
+                font-size: 11px;
+                min-height: 22px;
+            }
+            QLineEdit:focus, QTextEdit:focus, QTableWidget:focus {
+                border: 1px solid #a5b4fc;
+            }
+            QTableWidget {
+                gridline-color: #e2e8f0;
+                padding: 0px;
+                selection-background-color: #e0e7ff;
+                selection-color: #1e293b;
+                alternate-background-color: #f1f5f9;
+            }
+            QTableWidget::item { padding: 4px 8px; }
+            QTableWidget::item:selected {
+                background: #e0e7ff;
+                color: #1e293b;
+            }
+
+            /* ========== 表头：玻璃亮白 ========== */
+            QHeaderView::section {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #ffffff, stop:1 #f1f5f9);
+                color: #475569;
+                padding: 6px 8px;
+                border: none;
+                border-right: 1px solid #e2e8f0;
+                border-bottom: 1px solid #e2e8f0;
+                font-size: 11px;
+                font-weight: 600;
+            }
+            QHeaderView::section:last { border-right: none; }
+
+            /* ========== 进度条 ========== */
+            QProgressBar {
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                background: #f8fafc;
+                text-align: center;
+                color: #334155;
+                height: 18px;
+                font-size: 11px;
+            }
+            QProgressBar::chunk {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #818cf8, stop:1 #4f46e5);
+                border-radius: 7px;
+            }
+
+            /* ========== 下拉框 ========== */
+            QComboBox {
+                background: #ffffff;
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                padding: 3px 12px;
+                color: #1e293b;
+                min-width: 80px;
+                min-height: 24px;
+                font-size: 11px;
+            }
+            QComboBox:hover { border-color: #a5b4fc; }
+            QComboBox::drop-down { border: none; width: 22px; }
+            QComboBox::down-arrow {
+                image: none;
+                border-left: 4px solid transparent;
+                border-right: 4px solid transparent;
+                border-top: 5px solid #64748b;
+            }
+            QComboBox QAbstractItemView {
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                selection-background-color: #c7d2fe;
+                selection-color: #1e293b;
+                padding: 4px;
+                background: white;
+            }
+
+            /* ========== 滚动条：细线玻璃 ========== */
+            QScrollBar:vertical {
+                background: transparent;
+                width: 8px;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:vertical {
+                background: #cbd5e1;
+                border-radius: 4px;
+                min-height: 30px;
+            }
+            QScrollBar::handle:vertical:hover { background: #94a3b8; }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }
+            QScrollBar:horizontal {
+                background: transparent;
+                height: 8px;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:horizontal {
+                background: #cbd5e1;
+                border-radius: 4px;
+                min-width: 30px;
+            }
+            QScrollBar::handle:horizontal:hover { background: #94a3b8; }
+            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0px; }
+
+            /* ========== 状态栏 ========== */
+            QStatusBar {
+                background: #ffffff;
+                color: #64748b;
+                border-top: 1px solid #e2e8f0;
+                font-size: 11px;
+            }
+            QStatusBar QLabel { color: #64748b; font-size: 11px; }
+
+            /* ========== 菜单 ========== */
+            QMenu {
+                background: #ffffff;
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                padding: 4px;
+            }
+            QMenu::item {
+                padding: 6px 18px;
+                border-radius: 6px;
+                color: #334155;
+                font-size: 11px;
+            }
+            QMenu::item:selected { background: #eef2ff; color: #4f46e5; }
+
+            /* ========== 单选框 ========== */
+            QRadioButton {
+                color: #475569;
+                spacing: 6px;
+                font-size: 11px;
+            }
+            QRadioButton::indicator {
+                width: 14px;
+                height: 14px;
+            }
+            QRadioButton::indicator:unchecked {
+                border: 1px solid #cbd5e1;
+                border-radius: 7px;
+                background: #ffffff;
+            }
+            QRadioButton::indicator:checked {
+                border: 4px solid #6366f1;
+                border-radius: 7px;
+                background: #ffffff;
+            }
+
+            /* ========== 复选框 ========== */
+            QCheckBox {
+                color: #475569;
+                spacing: 6px;
+                font-size: 11px;
+            }
+            QCheckBox::indicator {
+                width: 14px;
+                height: 14px;
+            }
+            QCheckBox::indicator:unchecked {
+                border: 1px solid #cbd5e1;
+                border-radius: 3px;
+                background: #ffffff;
+            }
+            QCheckBox::indicator:checked {
+                border: 1px solid #6366f1;
+                border-radius: 3px;
+                background: #6366f1;
+            }
+        """)
+
         # 状态栏
         self.statusBar = QStatusBar()
         self.setStatusBar(self.statusBar)
-        self.statusBar.showMessage("就绪")
+        self.statusBar.showMessage("✨ 系统就绪")
 
         # 中央Tab容器
         central = QWidget()
         self.setCentralWidget(central)
-        layout = QVBoxLayout(central)
-        layout.setContentsMargins(0, 0, 0, 0)
+        main_layout = QVBoxLayout(central)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
 
-        # 设置窗口图标（大圣图标）
+        # 设置窗口图标
         icon_path = os.path.join(get_resource_path("data", "icons"), "monkey-icon.png")
         if os.path.exists(icon_path):
             self.setWindowIcon(QIcon(icon_path))
 
-        # 标题区域 - 橙色文字 + 图标
-        title_layout = QHBoxLayout()
-        title_layout.setAlignment(Qt.AlignCenter)
-        
-        # 图标
-        icon_label = QLabel()
+        # ========== 品牌顶栏（液态玻璃渐变） ==========
+        brand_bar = QWidget()
+        brand_bar.setObjectName("brand_bar")
+        brand_bar.setStyleSheet("""
+            QWidget#brand_bar {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #4f46e5, stop:0.5 #6366f1, stop:1 #4f46e5);
+                border-bottom: 1px solid #c7d2fe;
+            }
+            QLabel { background: transparent; }
+        """)
+        brand_layout = QHBoxLayout(brand_bar)
+        brand_layout.setContentsMargins(20, 10, 20, 10)
+
+        # 左侧：图标 + 标题
+        left_layout = QHBoxLayout()
         if os.path.exists(icon_path):
-            icon_pixmap = QIcon(icon_path).pixmap(48, 48)
+            icon_label = QLabel()
+            icon_pixmap = QIcon(icon_path).pixmap(32, 32)
             icon_label.setPixmap(icon_pixmap)
-        title_layout.addWidget(icon_label)
-        
-        # 标题 - 橙色文字
-        title = QLabel("大圣.快递物流出港帐单结算系统")
-        title.setFont(QFont("Microsoft YaHei", 22, QFont.Bold))
-        title.setStyleSheet("color: #FF6B00; padding: 10px;")
-        title_layout.addWidget(title)
-        
-        layout.addLayout(title_layout)
+            left_layout.addWidget(icon_label)
+
+        title = QLabel("大圣 · 快递物流出港账单结算系统")
+        title.setObjectName("brand_title")
+        title.setFont(QFont("Microsoft YaHei", 14, QFont.DemiBold))
+        title.setStyleSheet("color: white; padding-left: 8px;")
+        left_layout.addWidget(title)
+
+        brand_layout.addLayout(left_layout)
+        brand_layout.addStretch()
+
+        # 右侧：小信息
+        right_label = QLabel("高效 · 精准 · 智能")
+        right_label.setStyleSheet("color: #e0e7ff; font-size: 12px; padding-right: 6px;")
+        brand_layout.addWidget(right_label)
+
+        main_layout.addWidget(brand_bar)
+
+        # ========== 内容区（内边距） ==========
+        content_container = QWidget()
+        content_layout = QVBoxLayout(content_container)
+        content_layout.setContentsMargins(18, 12, 18, 8)
+        content_layout.setSpacing(8)
 
         # Tab页
         self.tabs = QTabWidget()
-        layout.addWidget(self.tabs)
+        self.tabs.setDocumentMode(True)
+        self.tabs.setMovable(False)
+        content_layout.addWidget(self.tabs)
 
-        # 底部信息栏 - 公司名称 + 联系电话 + 图标
+        # 底部信息栏
         bottom_bar = QWidget()
-        bottom_bar.setStyleSheet("background-color: #f5f5f5; border-top: 1px solid #e0e0e0;")
+        bottom_bar.setStyleSheet("""
+            background: #f8fafc;
+            border-top: 1px solid #e2e8f0;
+            padding: 6px 0px;
+        """)
         bottom_layout = QHBoxLayout(bottom_bar)
-        bottom_layout.setContentsMargins(15, 8, 15, 8)
+        bottom_layout.setContentsMargins(20, 8, 20, 8)
         bottom_layout.setAlignment(Qt.AlignCenter)
-        
-        # 图标
-        bottom_icon = QLabel()
+
         if os.path.exists(icon_path):
-            icon_pixmap = QIcon(icon_path).pixmap(32, 32)
-            bottom_icon.setPixmap(icon_pixmap)
-        bottom_layout.addWidget(bottom_icon)
-        
-        # 公司信息
+            bottom_icon = QLabel()
+            bottom_pixmap = QIcon(icon_path).pixmap(18, 18)
+            bottom_icon.setPixmap(bottom_pixmap)
+            bottom_layout.addWidget(bottom_icon)
+
         sub_title = QLabel("杭州喵喵至家网络有限公司  ·  大圣智慧软件  ·  联系电话：17771300068 / 19171045360")
-        sub_title.setFont(QFont("Microsoft YaHei", 10, QFont.Normal))
-        sub_title.setStyleSheet("color: #666666;")
+        sub_title.setFont(QFont("Microsoft YaHei", 10))
+        sub_title.setStyleSheet("color: #64748b;")
         bottom_layout.addWidget(sub_title)
-        
-        layout.addWidget(bottom_bar)
+
+        content_layout.addWidget(bottom_bar)
+
+        main_layout.addWidget(content_container)
 
         # 各Tab页
         self.tabs.addTab(self._create_import_tab(), "📁 导入计算")
@@ -558,18 +1007,40 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(widget)
 
         # 选择文件区
-        file_group = QGroupBox("第一步：选择Excel文件（最多5个）")
+        file_group = QGroupBox("📂 第一步：选择Excel文件（最多5个）")
         file_layout = QVBoxLayout(file_group)
 
         # 文件列表
         file_row = QHBoxLayout()
         self.file_list_label = QLabel("未选择文件（提示：可一次选择最多5个文件分批计算）")
-        self.file_list_label.setStyleSheet("color: #666; padding: 5px; background: #f5f5f5; border-radius: 3px;")
+        self.file_list_label.setStyleSheet("""
+            color: #64748b;
+            padding: 10px 12px;
+            background: #f8fafc;
+            border: 1px dashed #cbd5e1;
+            border-radius: 8px;
+            font-size: 11px;
+        """)
         self.file_list_label.setWordWrap(True)
+        self.file_list_label.setMinimumHeight(36)
         file_row.addWidget(self.file_list_label, 1)
 
         select_btn = QPushButton("📂 选择Excel文件")
-        select_btn.setStyleSheet("background: #1890ff; color: white; padding: 8px 20px; border: none; border-radius: 4px;")
+        select_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #6366f1, stop:1 #4f46e5);
+                color: white;
+                border: none;
+                padding: 6px 16px;
+                border-radius: 8px;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #818cf8, stop:1 #6366f1);
+            }
+        """)
         select_btn.clicked.connect(self._select_file)
         file_row.addWidget(select_btn)
 
@@ -577,61 +1048,61 @@ class MainWindow(QMainWindow):
         layout.addWidget(file_group)
 
         # 列名预览区
-        preview_group = QGroupBox("第二步：列名自动匹配结果")
+        preview_group = QGroupBox("🔍 第二步：列名自动匹配结果")
         preview_layout = QVBoxLayout(preview_group)
 
         self.match_label = QLabel("请先选择Excel文件（按第一个文件自动匹配列名）")
         self.match_label.setWordWrap(True)
-        self.match_label.setStyleSheet("padding: 5px; color: #666;")
+        self.match_label.setStyleSheet("""
+            padding: 10px 12px;
+            color: #334155;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 11px;
+        """)
         preview_layout.addWidget(self.match_label)
-
         layout.addWidget(preview_group)
 
         # 计算按钮
         self.calc_btn = QPushButton("🚀 开始计算")
-        self.calc_btn.setStyleSheet("background: #52c41a; color: white; padding: 12px; font-size: 14px; border: none; border-radius: 4px;")
+        self.calc_btn.setObjectName("primary_green")
         self.calc_btn.clicked.connect(self._start_calculate)
         layout.addWidget(self.calc_btn)
 
         # 进度条区域
-        progress_group = QGroupBox("处理进度")
+        progress_group = QGroupBox("📊 处理进度")
         progress_layout = QVBoxLayout(progress_group)
 
-        # 阶段文字（显示当前在做什么）
         self.progress_stage_label = QLabel("等待开始...")
-        self.progress_stage_label.setStyleSheet("color: #1890ff; font-weight: bold; padding: 3px;")
+        self.progress_stage_label.setStyleSheet("color: #4f46e5; font-weight: 500; padding: 3px; font-size: 11px;")
         progress_layout.addWidget(self.progress_stage_label)
 
-        # 进度条
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
         self.progress_bar.setFormat("0%")
-        self.progress_bar.setStyleSheet("""
-            QProgressBar {
-                border: 2px solid #ddd;
-                border-radius: 5px;
-                text-align: center;
-                background-color: #f5f5f5;
-                height: 28px;
-            }
-            QProgressBar::chunk {
-                background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 #52c41a, stop:1 #7ee66e);
-                border-radius: 3px;
-            }
-        """)
         self.progress_bar.setVisible(False)
         progress_layout.addWidget(self.progress_bar)
 
         layout.addWidget(progress_group)
 
         # 日志
-        log_group = QGroupBox("处理日志")
+        log_group = QGroupBox("📝 处理日志")
         log_layout = QVBoxLayout(log_group)
         self.log_text = QTextEdit()
         self.log_text.setReadOnly(True)
-        self.log_text.setMaximumHeight(200)
+        self.log_text.setMaximumHeight(180)
+        self.log_text.setStyleSheet("""
+            QTextEdit {
+                background: #ffffff;
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                padding: 6px;
+                color: #334155;
+                font-size: 11px;
+            }
+        """)
         log_layout.addWidget(self.log_text)
         layout.addWidget(log_group)
 
@@ -645,41 +1116,56 @@ class MainWindow(QMainWindow):
         return widget
 
     def _create_result_tab(self):
-        """结果Tab"""
+        """结果Tab - 液态玻璃风格"""
         widget = QWidget()
         layout = QVBoxLayout(widget)
 
-        # 顶部工具栏：文件选择 + 汇总信息
+        # 顶部工具栏：文件选择 + 汇总信息卡片
         top_bar = QHBoxLayout()
-        
+
         # 文件选择下拉框
-        file_label = QLabel("选择文件:")
-        file_label.setStyleSheet("font-weight: bold;")
+        file_label = QLabel("📁 选择文件:")
+        file_label.setStyleSheet("font-weight: 500; color: #4f46e5; font-size: 11px;")
         top_bar.addWidget(file_label)
-        
+
         self.file_combo = QComboBox()
-        self.file_combo.setMinimumWidth(250)
+        self.file_combo.setMinimumWidth(240)
         self.file_combo.currentIndexChanged.connect(self._on_file_combo_changed)
         top_bar.addWidget(self.file_combo)
-        
+
         top_bar.addStretch()
-        
-        # 汇总信息
-        info_group = QGroupBox("汇总信息")
+
+        # 汇总信息卡片
+        info_group = QGroupBox("📊 汇总信息")
+        info_group.setStyleSheet("""
+            QGroupBox {
+                background: #ffffff;
+                border: 1px solid #e2e8f0;
+                border-radius: 10px;
+                padding: 8px;
+                color: #334155;
+                font-weight: 500;
+                font-size: 11px;
+            }
+        """)
         info_layout = QHBoxLayout(info_group)
         self.summary_labels = {}
-        for key in ["总行数", "成功", "异常", "运费总额"]:
+        colors = ["#4f46e5", "#10b981", "#ef4444", "#f59e0b"]
+        for i, key in enumerate(["总行数", "成功", "异常", "运费总额"]):
             col = QVBoxLayout()
+            col.setSpacing(1)
             label = QLabel(key)
-            label.setStyleSheet("color: #999; font-size: 12px;")
+            label.setStyleSheet("color: #64748b; font-size: 10px;")
+            label.setAlignment(Qt.AlignCenter)
             value = QLabel("0")
-            value.setStyleSheet("color: #1890ff; font-size: 18px; font-weight: bold;")
+            value.setStyleSheet(f"color: {colors[i]}; font-size: 18px; font-weight: 600; padding-top: 1px;")
+            value.setAlignment(Qt.AlignCenter)
             self.summary_labels[key] = value
             col.addWidget(label)
             col.addWidget(value)
             info_layout.addLayout(col)
         top_bar.addWidget(info_group)
-        
+
         layout.addLayout(top_bar)
 
         # 表格
@@ -692,15 +1178,31 @@ class MainWindow(QMainWindow):
         self.result_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.result_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.result_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.result_table.setAlternatingRowColors(True)
+        self.result_table.verticalHeader().setDefaultSectionSize(30)
+        self.result_table.setStyleSheet("""
+            QTableWidget {
+                background: #ffffff;
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                gridline-color: #e2e8f0;
+                alternate-background-color: #f1f5f9;
+            }
+            QTableWidget::item { padding: 4px 8px; }
+            QTableWidget::item:selected {
+                background: #e0e7ff;
+                color: #1e293b;
+            }
+        """)
         layout.addWidget(self.result_table)
 
         # 导出按钮区域
         export_row = QHBoxLayout()
-        
+
         # 主导出按钮（带下拉菜单）
         export_btn = QPushButton("📥 导出Excel")
         export_row.addWidget(export_btn)
-        
+
         # 创建下拉菜单
         from PyQt5.QtWidgets import QMenu
         export_menu = QMenu(export_btn)
@@ -722,30 +1224,76 @@ class MainWindow(QMainWindow):
         return widget
 
     def _create_settlement_tab(self):
-        """多级结算Tab - 网点/承包区/月结客户（去掉快递员结算）"""
+        """多级结算Tab - 液态玻璃风格"""
         widget = QWidget()
         layout = QVBoxLayout(widget)
 
-        # 切换按钮（3种结算类型）
-        switch_row = QHBoxLayout()
+        # 切换按钮（3种结算类型）- 胶囊式
+        switch_container = QWidget()
+        switch_container.setStyleSheet("""
+            background: #f1f5f9;
+            border-radius: 10px;
+            padding: 6px;
+            border: 1px solid #e2e8f0;
+        """)
+        switch_row = QHBoxLayout(switch_container)
+
+        # 激活按钮样式
+        active_style = """
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #6366f1, stop:1 #4f46e5);
+                color: white;
+                border: none;
+                padding: 7px 20px;
+                border-radius: 8px;
+                font-weight: 500;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #818cf8, stop:1 #6366f1);
+            }
+        """
+        # 未激活样式
+        inactive_style = """
+            QPushButton {
+                background: #ffffff;
+                color: #64748b;
+                border: 1px solid #e2e8f0;
+                padding: 7px 20px;
+                border-radius: 8px;
+                font-weight: 500;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background: #eef2ff;
+                color: #4f46e5;
+                border-color: #c7d2fe;
+            }
+        """
+
         self.station_btn = QPushButton("📍 网点结算")
         self.station_btn.setCheckable(True)
         self.station_btn.setChecked(True)
+        self.station_btn.setStyleSheet(active_style)
         self.station_btn.clicked.connect(lambda: self._switch_settlement("station"))
         switch_row.addWidget(self.station_btn)
 
         self.contract_btn = QPushButton("🏢 承包区结算")
         self.contract_btn.setCheckable(True)
+        self.contract_btn.setStyleSheet(inactive_style)
         self.contract_btn.clicked.connect(lambda: self._switch_settlement("contract"))
         switch_row.addWidget(self.contract_btn)
 
         self.monthly_btn = QPushButton("📋 月结客户结算")
         self.monthly_btn.setCheckable(True)
+        self.monthly_btn.setStyleSheet(inactive_style)
         self.monthly_btn.clicked.connect(lambda: self._switch_settlement("monthly"))
         switch_row.addWidget(self.monthly_btn)
 
         switch_row.addStretch()
-        layout.addLayout(switch_row)
+        layout.addWidget(switch_container)
 
         # 结算表格
         self.settlement_table = QTableWidget()
@@ -757,6 +1305,22 @@ class MainWindow(QMainWindow):
         self.settlement_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.settlement_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.settlement_table.cellDoubleClicked.connect(self._export_settlement_detail)
+        self.settlement_table.setAlternatingRowColors(True)
+        self.settlement_table.verticalHeader().setDefaultSectionSize(30)
+        self.settlement_table.setStyleSheet("""
+            QTableWidget {
+                background: #ffffff;
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                gridline-color: #e2e8f0;
+                alternate-background-color: #f1f5f9;
+            }
+            QTableWidget::item { padding: 4px 8px; }
+            QTableWidget::item:selected {
+                background: #e0e7ff;
+                color: #1e293b;
+            }
+        """)
         layout.addWidget(self.settlement_table)
 
         # 导出按钮行
@@ -766,22 +1330,83 @@ class MainWindow(QMainWindow):
         export_row.addWidget(export_settlement_btn)
 
         export_detail_btn = QPushButton("📄 导出选中明细")
+        export_detail_btn.setStyleSheet("""
+            QPushButton {
+                background: #ffffff;
+                color: #475569;
+                border: 1px solid #cbd5e1;
+                padding: 6px 14px;
+                border-radius: 8px;
+                font-weight: 500;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background: #eef2ff;
+                color: #4f46e5;
+                border-color: #c7d2fe;
+            }
+        """)
         export_detail_btn.clicked.connect(self._export_settlement_detail)
         export_row.addWidget(export_detail_btn)
 
         export_row.addStretch()
         layout.addLayout(export_row)
-
         return widget
 
     def _create_history_tab(self):
-        """历史记录Tab"""
+        """历史记录Tab - 液态玻璃风格"""
         widget = QWidget()
         layout = QVBoxLayout(widget)
 
+        # 按钮行
+        btn_row = QHBoxLayout()
+
         refresh_btn = QPushButton("🔄 刷新历史")
+        refresh_btn.setStyleSheet("""
+            QPushButton {
+                background: #ffffff;
+                color: #475569;
+                border: 1px solid #cbd5e1;
+                padding: 6px 14px;
+                border-radius: 8px;
+                font-weight: 500;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background: #eef2ff;
+                color: #4f46e5;
+                border-color: #c7d2fe;
+            }
+        """)
         refresh_btn.clicked.connect(self._load_history)
-        layout.addWidget(refresh_btn)
+        btn_row.addWidget(refresh_btn)
+
+        clear_btn = QPushButton("🗑️ 清空历史")
+        clear_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #f87171, stop:1 #ef4444);
+                color: white;
+                border: none;
+                padding: 6px 14px;
+                border-radius: 8px;
+                font-weight: 500;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #fca5a5, stop:1 #f87171);
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #ef4444, stop:1 #b91c1c);
+            }
+        """)
+        clear_btn.clicked.connect(self._clear_history)
+        btn_row.addWidget(clear_btn)
+
+        btn_row.addStretch()
+        layout.addLayout(btn_row)
 
         self.history_table = QTableWidget()
         self.history_table.setColumnCount(6)
@@ -791,6 +1416,22 @@ class MainWindow(QMainWindow):
         self.history_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.history_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.history_table.cellDoubleClicked.connect(self._load_history_detail)
+        self.history_table.setAlternatingRowColors(True)
+        self.history_table.verticalHeader().setDefaultSectionSize(30)
+        self.history_table.setStyleSheet("""
+            QTableWidget {
+                background: #ffffff;
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                gridline-color: #e2e8f0;
+                alternate-background-color: #f1f5f9;
+            }
+            QTableWidget::item { padding: 4px 8px; }
+            QTableWidget::item:selected {
+                background: #e0e7ff;
+                color: #1e293b;
+            }
+        """)
         layout.addWidget(self.history_table)
 
         return widget
@@ -830,7 +1471,6 @@ class MainWindow(QMainWindow):
 
         btn_save_default = QPushButton("💾 保存默认设置")
         btn_save_default.clicked.connect(self._save_default_settings)
-        btn_save_default.setStyleSheet("background: #1890ff; color: white; padding: 6px 12px; border: none; border-radius: 4px;")
         default_layout.addWidget(btn_save_default)
 
         layout.addWidget(default_group)
@@ -881,11 +1521,25 @@ class MainWindow(QMainWindow):
         self.station_table.setHorizontalHeaderLabels(["客户编码", "客户名称", "规则类型"])
         self.station_table.horizontalHeader().setStretchLastSection(True)
         self.station_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Interactive)
-        self.station_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Interactive)
+        self.station_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self.station_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Interactive)
         self.station_table.setEditTriggers(QAbstractItemView.DoubleClicked)  # 双击才进入编辑
         self.station_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.station_table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.station_table.setAlternatingRowColors(True)
+        self.station_table.verticalHeader().setDefaultSectionSize(30)
+        self.station_table.setStyleSheet("""
+            QTableWidget {
+                background: #ffffff;
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                gridline-color: #e2e8f0;
+                alternate-background-color: #f1f5f9;
+                font-size: 11px;
+            }
+            QTableWidget::item { padding: 5px 8px; }
+            QTableWidget::item:selected { background: #e0e7ff; color: #1e293b; }
+        """)
         self.station_table.cellClicked.connect(self._on_station_selected)
         self.station_table.itemSelectionChanged.connect(
             lambda: self._on_station_selected(self.station_table.currentRow(), 0))
@@ -906,6 +1560,8 @@ class MainWindow(QMainWindow):
         self.region_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.region_table.setSelectionMode(QAbstractItemView.SingleSelection)
         self.region_table.cellClicked.connect(self._on_region_selected)
+        self.region_table.setAlternatingRowColors(True)
+        self.region_table.verticalHeader().setDefaultSectionSize(30)
         self.region_table.setMinimumHeight(120)
         region_list_layout.addWidget(self.region_table)
         station_layout.addWidget(self.region_list_widget)
@@ -915,8 +1571,8 @@ class MainWindow(QMainWindow):
         self.global_widget = QWidget()
         global_layout = QVBoxLayout(self.global_widget)
         global_layout.setContentsMargins(0, 0, 0, 0)
-        global_info = QLabel("已选中：全局规则（兜底规则，所有未匹配规则的派件都使用此规则")
-        global_info.setStyleSheet("color: #1890ff; font-weight: bold; padding: 10px;")
+        global_info = QLabel("已选中：全局规则（兜底规则，所有未匹配规则的派件都使用此规则）")
+        global_info.setStyleSheet("color: #4f46e5; font-weight: 500; padding: 8px; font-size: 11px;")
         global_info.setWordWrap(True)
         global_layout.addWidget(global_info)
         station_layout.addWidget(self.global_widget)
@@ -939,13 +1595,13 @@ class MainWindow(QMainWindow):
         self.selected_info_label = QLabel("👆 请在左侧点击选择一个客户，右侧即显示该客户的运费规则")
         self.selected_info_label.setStyleSheet("""
             QLabel {
-                color: #FFFFFF;
-                background-color: #FF6B00;
-                font-weight: bold;
-                font-size: 15px;
-                padding: 12px 16px;
-                border: 2px solid #E55A00;
-                border-radius: 6px;
+                color: #4f46e5;
+                background-color: #eef2ff;
+                font-weight: 500;
+                font-size: 11px;
+                padding: 8px 12px;
+                border: 1px solid #c7d2fe;
+                border-radius: 8px;
             }
         """)
         self.selected_info_label.setWordWrap(True)
@@ -959,6 +1615,14 @@ class MainWindow(QMainWindow):
             ["分组名称", "涵盖省份", "首重费(元)", "续重费(元)", "保底费(元)", "续重单位", "重量进位"]
         )
         self.station_rule_table.horizontalHeader().setStretchLastSection(False)
+        # 为每列设置最小宽度，避免右侧文字被截断
+        self.station_rule_table.setColumnWidth(0, 100)
+        self.station_rule_table.setColumnWidth(1, 320)
+        self.station_rule_table.setColumnWidth(2, 95)
+        self.station_rule_table.setColumnWidth(3, 95)
+        self.station_rule_table.setColumnWidth(4, 95)
+        self.station_rule_table.setColumnWidth(5, 115)
+        self.station_rule_table.setColumnWidth(6, 140)
         self.station_rule_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Interactive)
         self.station_rule_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self.station_rule_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Interactive)
@@ -966,20 +1630,29 @@ class MainWindow(QMainWindow):
         self.station_rule_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.Interactive)
         self.station_rule_table.horizontalHeader().setSectionResizeMode(5, QHeaderView.Interactive)
         self.station_rule_table.horizontalHeader().setSectionResizeMode(6, QHeaderView.Interactive)
+        # 最小总宽度，确保所有列完整可见，超出时自动显示横向滚动条
+        self.station_rule_table.setMinimumWidth(990)
         self.station_rule_table.setEditTriggers(QAbstractItemView.AllEditTriggers)
         self.station_rule_table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.station_rule_table.verticalHeader().setDefaultSectionSize(24)
+        self.station_rule_table.verticalHeader().setDefaultSectionSize(32)
         self.station_rule_table.verticalHeader().setVisible(False)
         self.station_rule_table.setMinimumHeight(440)
         self.station_rule_table.setSizePolicy(
             QSizePolicy.Expanding, QSizePolicy.Expanding
         )
-        self.station_rule_table.setToolTip(
-            "📌 客户规则采用分组管理（共14组覆盖34省+港澳台）\n"
-            "  • 修改分组价格后，点击「💾 保存所有规则」\n"
-            "  • 实际计算时会自动按组内省份展开\n"
-            "  • 区域规则、全局规则不受影响"
-        )
+        self.station_rule_table.setHorizontalScrollMode(QAbstractItemView.ScrollPerItem)
+        self.station_rule_table.setStyleSheet("""
+            QTableWidget {
+                alternate-background-color: #f1f5f9;
+                background: #ffffff;
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                gridline-color: #e2e8f0;
+                font-size: 11px;
+            }
+            QTableWidget::item { padding: 5px 8px; }
+            QTableWidget::item:selected { background: #e0e7ff; color: #1e293b; }
+        """)
 
         # 客户规则模式选择（仅客户模式显示）
         self.inherit_mode_row = QHBoxLayout()
@@ -1023,21 +1696,77 @@ class MainWindow(QMainWindow):
         quick_layout.addWidget(self.quick_rounding)
 
         btn_apply_selected = QPushButton("📝 应用到选中行")
-        btn_apply_selected.setStyleSheet("background: #1890ff; color: white; padding: 6px 12px; border: none; border-radius: 4px;")
+        btn_apply_selected.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #6366f1, stop:1 #4f46e5);
+                color: white;
+                border: none;
+                padding: 6px 14px;
+                border-radius: 8px;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #818cf8, stop:1 #6366f1);
+            }
+        """)
         btn_apply_selected.clicked.connect(self._quick_apply_selected)
         quick_layout.addWidget(btn_apply_selected)
 
         btn_apply_all = QPushButton("🗂️ 应用到所有34省")
-        btn_apply_all.setStyleSheet("background: #52c41a; color: white; padding: 6px 12px; border: none; border-radius: 4px;")
+        btn_apply_all.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #34d399, stop:1 #10b981);
+                color: white;
+                border: none;
+                padding: 6px 14px;
+                border-radius: 8px;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #6ee7b7, stop:1 #34d399);
+            }
+        """)
         btn_apply_all.clicked.connect(self._quick_apply_all)
         quick_layout.addWidget(btn_apply_all)
 
         btn_copy_region = QPushButton("📋 从区域规则复制")
-        btn_copy_region.setStyleSheet("background: #fa8c16; color: white; padding: 6px 12px; border: none; border-radius: 4px;")
+        btn_copy_region.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #38bdf8, stop:1 #0284c7);
+                color: white;
+                border: none;
+                padding: 6px 14px;
+                border-radius: 8px;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #7dd3fc, stop:1 #38bdf8);
+            }
+        """)
         btn_copy_region.clicked.connect(self._quick_copy_from_region)
         quick_layout.addWidget(btn_copy_region)
 
         btn_clear_inputs = QPushButton("清空输入")
+        btn_clear_inputs.setStyleSheet("""
+            QPushButton {
+                background: #ffffff;
+                color: #475569;
+                border: 1px solid #cbd5e1;
+                padding: 6px 14px;
+                border-radius: 8px;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background: #f1f5f9;
+                border-color: #94a3b8;
+            }
+        """)
         btn_clear_inputs.clicked.connect(self._quick_clear_inputs)
         quick_layout.addWidget(btn_clear_inputs)
 
@@ -1060,11 +1789,41 @@ class MainWindow(QMainWindow):
         # 保存按钮
         bottom_btn_layout = QHBoxLayout()
         btn_save_all = QPushButton("💾 保存所有规则")
-        btn_save_all.setStyleSheet("background: #52c41a; color: white; padding: 10px 24px; font-size: 14px; border: none; border-radius: 4px;")
+        btn_save_all.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #6366f1, stop:1 #4f46e5);
+                color: white;
+                border: none;
+                padding: 8px 22px;
+                border-radius: 8px;
+                font-weight: 500;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #818cf8, stop:1 #6366f1);
+            }
+        """)
         btn_save_all.clicked.connect(self._save_all_rules)
         bottom_btn_layout.addWidget(btn_save_all)
 
         btn_reload_all = QPushButton("🔄 重新加载")
+        btn_reload_all.setStyleSheet("""
+            QPushButton {
+                background: #ffffff;
+                color: #475569;
+                border: 1px solid #cbd5e1;
+                padding: 8px 22px;
+                border-radius: 8px;
+                font-weight: 500;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background: #f1f5f9;
+                border-color: #94a3b8;
+            }
+        """)
         btn_reload_all.clicked.connect(self._reload_all_rules)
         bottom_btn_layout.addWidget(btn_reload_all)
 
@@ -1074,20 +1833,20 @@ class MainWindow(QMainWindow):
         promotion_group = QGroupBox("🎁 活动加价规则")
         promo_layout = QVBoxLayout(promotion_group)
         promo_info = QLabel("支持设置多条活动加价规则。计算时自动检测当前日期是否在活动期间，按规则加价。")
-        promo_info.setStyleSheet("color: #666; padding: 2px; font-size: 11px;")
+        promo_info.setStyleSheet("color: #64748b; padding: 2px; font-size: 11px;")
         promo_layout.addWidget(promo_info)
 
         # 活动规则表格
         self.promotion_table = QTableWidget()
-        self.promotion_table.setColumnCount(5)
-        self.promotion_table.setHorizontalHeaderLabels(["活动名称", "开始日期", "结束日期", "加价类型", "加价值"])
+        self.promotion_table.setColumnCount(6)
+        self.promotion_table.setHorizontalHeaderLabels(["活动名称", "开始日期", "结束日期", "加价类型", "加价值", "限定省份(逗号分隔)"])
         self.promotion_table.horizontalHeader().setStretchLastSection(True)
         self.promotion_table.setEditTriggers(QAbstractItemView.AllEditTriggers)
         self.promotion_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.promotion_table.setMinimumHeight(80)
-        self.promotion_table.setMaximumHeight(120)
-        self.promotion_table.verticalHeader().setDefaultSectionSize(22)
-        self.promotion_table.horizontalHeader().setFixedHeight(24)
+        self.promotion_table.setMaximumHeight(130)
+        self.promotion_table.verticalHeader().setDefaultSectionSize(28)
+        self.promotion_table.horizontalHeader().setFixedHeight(26)
         promo_layout.addWidget(self.promotion_table)
 
         # 活动操作按钮
@@ -1099,7 +1858,7 @@ class MainWindow(QMainWindow):
         btn_del_promo.clicked.connect(self._delete_promotion)
         promo_btn_layout.addWidget(btn_del_promo)
         promo_hint = QLabel("加价类型可选：fixed(每单加X元) / weight(每kg加X元) / percent(加X%)")
-        promo_hint.setStyleSheet("color: #999; font-size: 12px;")
+        promo_hint.setStyleSheet("color: #64748b; font-size: 11px;")
         promo_btn_layout.addWidget(promo_hint, 1)
         promo_layout.addLayout(promo_btn_layout)
         right_layout.addWidget(promotion_group)
@@ -1129,7 +1888,7 @@ class MainWindow(QMainWindow):
         btn_test.clicked.connect(self._rule_test)
         test_layout.addWidget(btn_test)
         self.test_result = QLabel("结果：—")
-        self.test_result.setStyleSheet("color: #FF6B00; font-weight: bold;")
+        self.test_result.setStyleSheet("color: #10b981; font-weight: 500; font-size: 11px;")
         test_layout.addWidget(self.test_result, 1)
         right_layout.addWidget(test_group)
 
@@ -1254,6 +2013,7 @@ class MainWindow(QMainWindow):
                         self.promotion_table.setItem(row, 2, QTableWidgetItem(str(pr.get("end_date", ""))))
                         self.promotion_table.setItem(row, 3, QTableWidgetItem(str(pr.get("markup_type", "percent"))))
                         self.promotion_table.setItem(row, 4, QTableWidgetItem(str(pr.get("markup_value", "0"))))
+                        self.promotion_table.setItem(row, 5, QTableWidgetItem(str(pr.get("regions", ""))))
             except Exception:
                 pass
         except Exception as e:
@@ -1430,6 +2190,10 @@ class MainWindow(QMainWindow):
     def _reload_rules_from_file_only(self):
         """仅从 fee_rules.json 文件重新加载规则数据到内存缓存（不影响当前选中行，也不重置UI）"""
         try:
+            # 强制刷新 calculate_service 中的全局规则缓存（包括活动加价规则）
+            from app.services.calculate_service import _build_rule_indexes
+            _build_rule_indexes(force_reload=True)
+
             service = RuleService()
             rules = service.load_rules()
 
@@ -1476,6 +2240,23 @@ class MainWindow(QMainWindow):
                         continued_unit, weight_rounding
                     )
             self._station_province_cache = new_station_cache
+
+            # 重新加载活动加价规则到 UI 表格（包含省份限定）
+            try:
+                promo_rules = service.load_promotion_rules()
+                if hasattr(self, 'promotion_table'):
+                    self.promotion_table.setRowCount(0)
+                    for pr in promo_rules:
+                        row = self.promotion_table.rowCount()
+                        self.promotion_table.insertRow(row)
+                        self.promotion_table.setItem(row, 0, QTableWidgetItem(str(pr.get("name", ""))))
+                        self.promotion_table.setItem(row, 1, QTableWidgetItem(str(pr.get("start_date", ""))))
+                        self.promotion_table.setItem(row, 2, QTableWidgetItem(str(pr.get("end_date", ""))))
+                        self.promotion_table.setItem(row, 3, QTableWidgetItem(str(pr.get("markup_type", "percent"))))
+                        self.promotion_table.setItem(row, 4, QTableWidgetItem(str(pr.get("markup_value", "0"))))
+                        self.promotion_table.setItem(row, 5, QTableWidgetItem(str(pr.get("regions", ""))))
+            except Exception:
+                pass
 
         except Exception as e:
             import logging
@@ -1591,6 +2372,7 @@ class MainWindow(QMainWindow):
 
                 unit_combo = QComboBox()
                 unit_combo.addItems(["全续", "百克续"])
+                unit_combo.setMinimumHeight(26)
                 if continued_unit == "100g":
                     unit_combo.setCurrentText("百克续")
                 else:
@@ -1600,6 +2382,7 @@ class MainWindow(QMainWindow):
 
                 rounding_combo = QComboBox()
                 rounding_combo.addItems(list(self.ROUNDING_MODE_MAP.keys()))
+                rounding_combo.setMinimumHeight(26)
                 rounding_text = self.ROUNDING_MODE_REVERSE.get(weight_rounding, "实际重量")
                 rounding_combo.setCurrentText(rounding_text)
                 rounding_combo.currentTextChanged.connect(lambda text, r=row: self._on_rounding_changed(r, text))
@@ -1811,6 +2594,7 @@ class MainWindow(QMainWindow):
 
         unit_combo = QComboBox()
         unit_combo.addItems(["全续", "百克续"])
+        unit_combo.setMinimumHeight(26)
         if rule.continued_unit == "100g":
             unit_combo.setCurrentText("百克续")
         else:
@@ -1820,6 +2604,7 @@ class MainWindow(QMainWindow):
 
         rounding_combo = QComboBox()
         rounding_combo.addItems(list(self.ROUNDING_MODE_MAP.keys()))
+        rounding_combo.setMinimumHeight(26)
         rounding_text = self.ROUNDING_MODE_REVERSE.get(rule.weight_rounding, "实际重量")
         rounding_combo.setCurrentText(rounding_text)
         rounding_combo.currentTextChanged.connect(lambda text, r=row_idx: self._on_rounding_changed(r, text))
@@ -1865,6 +2650,7 @@ class MainWindow(QMainWindow):
 
         unit_combo = QComboBox()
         unit_combo.addItems(["全续", "百克续"])
+        unit_combo.setMinimumHeight(26)
         if global_rule.continued_unit == "100g":
             unit_combo.setCurrentText("百克续")
         else:
@@ -1874,6 +2660,7 @@ class MainWindow(QMainWindow):
 
         rounding_combo = QComboBox()
         rounding_combo.addItems(list(self.ROUNDING_MODE_MAP.keys()))
+        rounding_combo.setMinimumHeight(26)
         rounding_text = self.ROUNDING_MODE_REVERSE.get(global_rule.weight_rounding, "实际重量")
         rounding_combo.setCurrentText(rounding_text)
         rounding_combo.currentTextChanged.connect(lambda text, r=row: self._on_rounding_changed(r, text))
@@ -2044,7 +2831,7 @@ class MainWindow(QMainWindow):
             error_group = QGroupBox(f"⚠️ 错误信息（共 {errors_count} 条）")
             error_layout = QVBoxLayout(error_group)
             error_label = QLabel("\n".join(parsed["errors"][:20]))
-            error_label.setStyleSheet("color: red;")
+            error_label.setStyleSheet("color: #ef4444; font-size: 11px;")
             error_label.setWordWrap(True)
             error_layout.addWidget(error_label)
             layout.addWidget(error_group)
@@ -2239,7 +3026,7 @@ class MainWindow(QMainWindow):
             if not has_global:
                 all_rules.append(Rule("全局规则", "", "", 0, 999, 6.0, 3.0, 6.0, "global"))
 
-            # 收集活动加价规则
+            # 收集活动加价规则（含省份限定）
             promo_list = []
             for row in range(self.promotion_table.rowCount()):
                 def get_promo_val(col):
@@ -2250,13 +3037,15 @@ class MainWindow(QMainWindow):
                 end = get_promo_val(2)
                 mtype = get_promo_val(3)
                 mval = get_promo_val(4)
+                regions = get_promo_val(5)  # 省份限定（逗号分隔），空=所有省份
                 if name and start and end:
                     promo_list.append({
                         "name": name,
                         "start_date": start,
                         "end_date": end,
                         "markup_type": mtype or "percent",
-                        "markup_value": float(mval) if mval else 0
+                        "markup_value": float(mval) if mval else 0,
+                        "regions": regions or ""
                     })
 
             if service.save_rules(all_rules, promo_list):
@@ -2358,15 +3147,15 @@ class MainWindow(QMainWindow):
             self._station_province_cache[station_code] = province_data
 
     def _add_promotion(self):
-        """添加活动加价规则"""
+        """添加活动加价规则（省份留空=对所有省份生效）"""
         row = self.promotion_table.rowCount()
         self.promotion_table.insertRow(row)
-        # 默认填入双十一示例
         self.promotion_table.setItem(row, 0, QTableWidgetItem("双十一大促"))
         self.promotion_table.setItem(row, 1, QTableWidgetItem("2026-11-01"))
         self.promotion_table.setItem(row, 2, QTableWidgetItem("2026-11-15"))
         self.promotion_table.setItem(row, 3, QTableWidgetItem("percent"))
         self.promotion_table.setItem(row, 4, QTableWidgetItem("20"))
+        self.promotion_table.setItem(row, 5, QTableWidgetItem(""))  # 省份限定（留空=所有省份）
 
     def _delete_promotion(self):
         """删除选中的活动规则"""
@@ -2383,7 +3172,6 @@ class MainWindow(QMainWindow):
         except ValueError:
             QMessageBox.warning(self, "格式错误", "重量必须是数字")
             return
-        # QComboBox 用 currentText()，QLineEdit 用 text()
         if hasattr(self.test_region, "currentText"):
             region = self.test_region.currentText()
         else:
@@ -2392,7 +3180,35 @@ class MainWindow(QMainWindow):
 
         service = RuleService()
         result = service.calculate_fee(w, region, station_code)
-        status = "异常 (" + result["remark"] + ")" if result["is_exception"] else f"¥{result['fee']:.2f}（{result['rule_name']}）"
+
+        if result["is_exception"]:
+            status = "异常 (" + result["remark"] + ")"
+        else:
+            status = f"¥{result['fee']:.2f}（{result['rule_name']}）"
+            # 额外提示活动规则日期信息
+            try:
+                promo_rules = service.load_promotion_rules()
+                if promo_rules:
+                    from datetime import datetime
+                    today_str = datetime.now().strftime("%Y-%m-%d")
+                    today = datetime.strptime(today_str, "%Y-%m-%d")
+                    active_count = 0
+                    upcoming_count = 0
+                    for pr in promo_rules:
+                        try:
+                            start = datetime.strptime(str(pr.get("start_date", "")), "%Y-%m-%d")
+                            end = datetime.strptime(str(pr.get("end_date", "")), "%Y-%m-%d")
+                            if start <= today <= end:
+                                active_count += 1
+                            elif today < start:
+                                upcoming_count += 1
+                        except Exception:
+                            continue
+                    if active_count == 0 and upcoming_count > 0:
+                        status += f" [注意:{upcoming_count}条活动未开始]"
+            except Exception:
+                pass
+
         self.test_result.setText("结果：" + status)
 
     def _load_default_settings(self):
@@ -2466,7 +3282,7 @@ class MainWindow(QMainWindow):
                 fsize = os.path.getsize(fp) / (1024 * 1024)
                 file_list_text += f"  {i + 1}. {os.path.basename(fp)}  ({fsize:.1f} MB)\n"
             self.file_list_label.setText(file_list_text.strip())
-            self.file_list_label.setStyleSheet("color: #1890ff; padding: 5px; background: #e6f7ff; border-radius: 3px;")
+            self.file_list_label.setStyleSheet("color: #4f46e5; padding: 8px 12px; background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 8px; font-size: 11px;")
 
             # 用第一个文件预览列名
             self._preview_columns_async(file_paths[0])
@@ -2474,7 +3290,7 @@ class MainWindow(QMainWindow):
     def _preview_columns_async(self, file_path):
         """异步预览列名和匹配结果 - 不会阻塞UI主线程"""
         self.match_label.setText("⏳ 正在读取文件，请稍候...")
-        self.match_label.setStyleSheet("padding: 5px; color: #1890ff; font-weight: bold;")
+        self.match_label.setStyleSheet("padding: 8px 12px; color: #4f46e5; font-weight: 500; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 11px;")
         self.progress_bar.setVisible(True)
         self.progress_bar.setValue(5)
         self.progress_bar.setFormat("读取文件中... %p%")
@@ -2509,7 +3325,7 @@ class MainWindow(QMainWindow):
             text_lines.append(f"未匹配的列：{', '.join(matched['unmatched'])}")
             text_lines.append("（未匹配列不影响计算，但不会参与运费逻辑）")
 
-        self.match_label.setStyleSheet("padding: 5px; color: #333;")
+        self.match_label.setStyleSheet("padding: 8px 12px; color: #334155; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 11px;")
         self.match_label.setText("\n".join(text_lines))
 
         # 完成后隐藏进度条，重置状态
@@ -2518,7 +3334,7 @@ class MainWindow(QMainWindow):
 
     def _on_preview_error(self, error):
         """预览失败"""
-        self.match_label.setStyleSheet("padding: 5px; color: #ff4d4f; font-weight: bold;")
+        self.match_label.setStyleSheet("padding: 8px 12px; color: #ef4444; font-weight: 500; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; font-size: 11px;")
         self.match_label.setText(f"❌ 解析失败：{error}")
         self.progress_bar.setVisible(False)
         self.progress_stage_label.setText("读取失败")
@@ -2534,7 +3350,7 @@ class MainWindow(QMainWindow):
         self.progress_bar.setValue(0)
         self.progress_bar.setFormat("%p%")
         self.progress_stage_label.setText(f"准备开始... 共 {len(self.selected_files)} 个文件")
-        self.progress_stage_label.setStyleSheet("color: #1890ff; font-weight: bold; padding: 3px;")
+        self.progress_stage_label.setStyleSheet("color: #4f46e5; font-weight: 500; padding: 3px; font-size: 11px;")
 
         # 禁用按钮，防止重复点击
         self.calc_btn.setEnabled(False)
@@ -2569,7 +3385,7 @@ class MainWindow(QMainWindow):
         self.progress_bar.setValue(100)
         self.progress_bar.setFormat("100%")
         self.progress_stage_label.setText("✅ 计算完成！")
-        self.progress_stage_label.setStyleSheet("color: #52c41a; font-weight: bold; padding: 3px;")
+        self.progress_stage_label.setStyleSheet("color: #10b981; font-weight: 500; padding: 3px; font-size: 11px;")
         self.calc_btn.setEnabled(True)
 
         self.current_record_id = result["record_id"]
@@ -2621,7 +3437,7 @@ class MainWindow(QMainWindow):
         try:
             self.progress_bar.setVisible(False)
             self.progress_stage_label.setText(f"❌ 计算失败：{error}")
-            self.progress_stage_label.setStyleSheet("color: #ff4d4f; font-weight: bold; padding: 3px;")
+            self.progress_stage_label.setStyleSheet("color: #ef4444; font-weight: 500; padding: 3px; font-size: 11px;")
             self.calc_btn.setEnabled(True)
             self.statusBar.showMessage("计算失败")
             self.log_text.append(f"❌ 计算失败：{error}")
@@ -2749,12 +3565,49 @@ class MainWindow(QMainWindow):
             pass
 
     def _switch_settlement(self, type_):
-        """切换结算视图 - 网点/承包区/月结客户（带缓存+表格性能优化，避免切换卡顿）"""
+        """切换结算视图 - 网点/承包区/月结客户"""
+        active_style = """
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #6366f1, stop:1 #4f46e5);
+                color: white;
+                border: none;
+                padding: 7px 20px;
+                border-radius: 8px;
+                font-weight: 500;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #818cf8, stop:1 #6366f1);
+            }
+        """
+        inactive_style = """
+            QPushButton {
+                background: #ffffff;
+                color: #64748b;
+                border: 1px solid #e2e8f0;
+                padding: 7px 20px;
+                border-radius: 8px;
+                font-weight: 500;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background: #eef2ff;
+                color: #4f46e5;
+                border-color: #c7d2fe;
+            }
+        """
+
         self.station_btn.setChecked(type_ == "station")
         self.contract_btn.setChecked(type_ == "contract")
         self.monthly_btn.setChecked(type_ == "monthly")
 
-        # 确保完整数据已加载（优先用内存缓存，避免每次切换从DB加载）
+        self.station_btn.setStyleSheet(active_style if type_ == "station" else inactive_style)
+        self.contract_btn.setStyleSheet(active_style if type_ == "contract" else inactive_style)
+        self.monthly_btn.setStyleSheet(active_style if type_ == "monthly" else inactive_style)
+
+        # 确保完整数据已加载
         if not self._ensure_details_loaded():
             QMessageBox.warning(self, "提示", "暂无结算数据，请先完成计算")
             return
@@ -2806,45 +3659,71 @@ class MainWindow(QMainWindow):
         self.settlement_table.setSortingEnabled(True)
 
     def _show_export_overlay(self):
-        """显示居中的橙色大字导出提示"""
+        """显示导出进度（使用 QProgressDialog，PyQt5 标准组件，不会崩溃）"""
         self._hide_export_overlay()
-        overlay = QLabel("☕ 数据导出中...请喝杯咖啡，好了我叫你", self)
-        overlay.setAlignment(Qt.AlignCenter)
-        overlay.setStyleSheet("""
-            QLabel {
-                color: #FF7A00;
-                background-color: #FFFFFF;
-                font-size: 18px;
-                font-weight: bold;
-                padding: 24px 40px;
-                border: 3px solid #FF7A00;
-                border-radius: 14px;
-            }
-        """)
-        overlay.setWindowFlags(Qt.FramelessWindowHint | Qt.Tool | Qt.WindowStaysOnTopHint)
-        overlay.setAttribute(Qt.WA_TranslucentBackground, False)
-        overlay.adjustSize()
-        parent = self
-        fg = parent.frameGeometry()
-        center_point = fg.center()
-        overlay.move(
-            center_point.x() - overlay.width() // 2,
-            center_point.y() - overlay.height() // 2
+
+        # QProgressDialog 是 PyQt5 标准组件，父窗口设为 self，自动居中
+        dlg = QProgressDialog(
+            "正在准备写入 Excel...",          # 正文
+            None,                              # 取消按钮文本（None=不显示取消）
+            0,                                 # 最小值
+            100,                               # 最大值
+            self                               # 父窗口
         )
-        self._export_overlay = overlay
-        overlay.show()
-        from PyQt5.QtWidgets import QApplication
-        QApplication.processEvents()
+        dlg.setWindowTitle("数据导出中")
+        dlg.setWindowModality(Qt.WindowModal)  # 窗口级模态
+        dlg.setMinimumDuration(0)              # 立即显示（不等待）
+        dlg.setFixedWidth(420)
+        dlg.setAutoClose(False)                # 100% 后不自动关闭
+        dlg.setAutoReset(False)                # 100% 后不自动重置
+        dlg.setCancelButton(None)              # 禁用取消按钮
+
+        # 设置窗口图标（猴子图标）
+        try:
+            icon_path = os.path.join(get_resource_path("data", "icons"), "monkey-icon.png")
+            if os.path.exists(icon_path):
+                dlg.setWindowIcon(QIcon(icon_path))
+        except Exception:
+            pass
+
+        # 显示
+        dlg.show()
+        dlg.setValue(0)
+        dlg.setLabelText("正在准备写入 Excel，请稍候...")
+        # 主动处理事件让窗口先渲染出来
+        from PyQt5.QtWidgets import QApplication as _QApp
+        _QApp.processEvents()
+
+        self._export_overlay = dlg
+
+    def _update_export_progress(self, value, message=""):
+        """更新导出进度（由后台线程的 progress 信号触发）"""
+        if self._export_overlay is None:
+            return
+        try:
+            value = int(max(0, min(100, value)))
+            if message:
+                self._export_overlay.setLabelText(f"{value:3d}%  {message}")
+            else:
+                self._export_overlay.setLabelText(f"{value:3d}%")
+            self._export_overlay.setValue(value)
+            # 处理事件，刷新 UI
+            from PyQt5.QtWidgets import QApplication as _QApp
+            _QApp.processEvents()
+        except Exception:
+            pass
 
     def _hide_export_overlay(self):
-        """隐藏导出提示"""
-        if self._export_overlay is not None:
-            try:
-                self._export_overlay.close()
-                self._export_overlay.deleteLater()
-            except Exception:
-                pass
-            self._export_overlay = None
+        """关闭导出进度"""
+        if self._export_overlay is None:
+            return
+        dlg = self._export_overlay
+        self._export_overlay = None
+        try:
+            dlg.close()
+            dlg.deleteLater()
+        except Exception:
+            pass
 
     def _export_details(self):
         """导出明细 - 先弹保存对话框，再后台线程导出，避免未响应"""
@@ -2946,15 +3825,18 @@ class MainWindow(QMainWindow):
             self.export_worker = ExportWorker(self.current_record_id, file_path)
             self.export_worker.finished.connect(self._on_export_done)
             self.export_worker.error.connect(self._on_export_error)
+            self.export_worker.progress.connect(self._update_export_progress)
             self.export_worker.start()
         except Exception as e:
             self._hide_export_overlay()
             QMessageBox.critical(self, "失败", f"导出启动失败：{e}")
 
     def _on_export_done(self, file_path: str):
-        self._hide_export_overlay()
-        self.statusBar.showMessage(f"导出完成：{file_path}")
-        QMessageBox.information(self, "成功", f"已导出到：\n{file_path}")
+        self._update_export_progress(100, "写入完成，正在关闭文件...")
+        QTimer.singleShot(400, lambda: self._hide_export_overlay())
+        QTimer.singleShot(500, lambda: self.statusBar.showMessage(f"导出完成：{file_path}"))
+        QTimer.singleShot(500, lambda: QMessageBox.information(
+            self, "成功", f"已导出到：\n{file_path}"))
 
     def _on_export_error(self, err: str):
         self._hide_export_overlay()
@@ -2962,115 +3844,131 @@ class MainWindow(QMainWindow):
         QMessageBox.critical(self, "失败", f"导出失败：\n{err[:500]}")
 
     def _export_all_separately(self):
-        """分别导出所有导入的文件"""
+        """分别导出所有导入的文件 - 使用后台线程避免UI未响应"""
         if not self.all_record_ids:
             QMessageBox.warning(self, "提示", "暂无数据可导出")
             return
-        
+
         if len(self.all_record_ids) == 1:
-            # 只有一个文件，直接调用普通导出
             self._export_details()
             return
-        
-        # 选择导出目录
+
         export_dir = QFileDialog.getExistingDirectory(
             self, "选择导出目录", os.path.expanduser("~/Desktop")
         )
         if not export_dir:
             return
-        
-        # 显示确认信息
+
         from app.services.export_service import ExportService
         service = ExportService()
         records_info = service.get_record_info(self.all_record_ids)
-        
+
         info_text = f"将分别导出 {len(self.all_record_ids)} 个文件到：\n{export_dir}\n\n"
         for info in records_info:
             info_text += f"• {info['file_name']}: {info['total_rows']} 行, ¥{info['total_fee']:.2f}\n"
-        
+
         reply = QMessageBox.question(self, "确认导出", info_text,
                                      QMessageBox.Yes | QMessageBox.No)
         if reply != QMessageBox.Yes:
             return
-        
-        # 执行导出
+
         self.statusBar.showMessage("正在导出多个文件...")
         self._show_export_overlay()
         try:
-            exported_files = service.export_multiple_records(
-                self.all_record_ids, 
-                export_dir,
-                progress_callback=lambda p, m: self.statusBar.showMessage(m)
-            )
-            self._hide_export_overlay()
-            self.statusBar.showMessage(f"导出完成，共 {len(exported_files)} 个文件")
-            QMessageBox.information(self, "成功", 
-                f"已导出 {len(exported_files)} 个文件到：\n{export_dir}")
+            self._multi_export_dir = export_dir
+            self.multi_export_worker = ExportMultiWorker(self.all_record_ids, export_dir)
+            self.multi_export_worker.finished.connect(self._on_multi_export_done)
+            self.multi_export_worker.error.connect(self._on_multi_export_error)
+            self.multi_export_worker.progress.connect(self._update_export_progress)
+            self.multi_export_worker.start()
         except Exception as e:
             self._hide_export_overlay()
-            self.statusBar.showMessage("导出失败")
-            QMessageBox.critical(self, "失败", f"导出失败：\n{str(e)[:500]}")
+            QMessageBox.critical(self, "失败", f"导出启动失败：{e}")
+
+    def _on_multi_export_done(self, exported_files: list):
+        self._update_export_progress(100, "写入完成，正在关闭文件...")
+        QTimer.singleShot(400, lambda: self._hide_export_overlay())
+        export_dir = getattr(self, '_multi_export_dir', "")
+        if export_dir and len(exported_files) > 0:
+            first_dir = os.path.dirname(exported_files[0])
+        else:
+            first_dir = export_dir
+        QTimer.singleShot(500, lambda: self.statusBar.showMessage(
+            f"导出完成：{first_dir}  共 {len(exported_files)} 个文件"))
+        QTimer.singleShot(500, lambda: QMessageBox.information(
+            self, "成功", f"已导出 {len(exported_files)} 个文件到：\n{first_dir}"))
+
+    def _on_multi_export_error(self, err: str):
+        self._hide_export_overlay()
+        self.statusBar.showMessage("导出失败")
+        QMessageBox.critical(self, "失败", f"导出失败：\n{err[:500]}")
 
     def _export_merged(self):
-        """合并导出所有文件（自动拆分避免超104万行）"""
+        """合并导出所有文件（自动拆分避免超104万行）- 使用后台线程"""
         if not self.all_record_ids:
             QMessageBox.warning(self, "提示", "暂无数据可导出")
             return
-        
-        # 选择导出目录
+
         export_dir = QFileDialog.getExistingDirectory(
             self, "选择导出目录", os.path.expanduser("~/Desktop")
         )
         if not export_dir:
             return
-        
-        # 统计总行数，预估是否需要拆分
+
         from app.services.export_service import ExportService
         service = ExportService()
         records_info = service.get_record_info(self.all_record_ids)
         total_rows = sum(info['total_rows'] for info in records_info)
-        
-        # 预估文件数（每文件最多100万行）
+
         estimated_files = max(1, (total_rows + 999999) // 1000000)
-        
+
         info_text = f"总数据：{total_rows:,} 行\n"
         info_text += f"预计导出：{estimated_files} 个Excel文件\n"
         info_text += f"导出目录：{export_dir}\n\n"
         info_text += "注意：合并导出会新增\"来源文件\"列，标识每行数据的原始文件名。\n"
         if estimated_files > 1:
             info_text += f"\n⚠️ 数据超过100万行，将自动拆分为 {estimated_files} 个文件。"
-        
+
         reply = QMessageBox.question(self, "确认合并导出", info_text,
                                      QMessageBox.Yes | QMessageBox.No)
         if reply != QMessageBox.Yes:
             return
-        
-        # 执行合并导出
+
         self.statusBar.showMessage("正在合并导出...")
         self._show_export_overlay()
         try:
-            exported_files = service.export_merged_records(
-                self.all_record_ids,
-                export_dir,
-                base_name="合并结算",
-                progress_callback=lambda p, m: self.statusBar.showMessage(m)
-            )
-            
-            self._hide_export_overlay()
-            if len(exported_files) > 1:
-                self.statusBar.showMessage(f"导出完成，已拆分为 {len(exported_files)} 个文件")
-                QMessageBox.information(self, "成功", 
-                    f"数据已拆分导出为 {len(exported_files)} 个文件：\n\n" + 
-                    "\n".join([os.path.basename(f) for f in exported_files]) +
-                    f"\n\n保存目录：{export_dir}")
-            else:
-                self.statusBar.showMessage(f"导出完成")
-                QMessageBox.information(self, "成功", 
-                    f"已导出到：\n{exported_files[0]}")
+            self._merged_export_dir = export_dir
+            self.merged_export_worker = ExportMergedWorker(self.all_record_ids, export_dir)
+            self.merged_export_worker.finished.connect(self._on_merged_export_done)
+            self.merged_export_worker.error.connect(self._on_merged_export_error)
+            self.merged_export_worker.progress.connect(self._update_export_progress)
+            self.merged_export_worker.start()
         except Exception as e:
             self._hide_export_overlay()
-            self.statusBar.showMessage("导出失败")
-            QMessageBox.critical(self, "失败", f"导出失败：\n{str(e)[:500]}")
+            QMessageBox.critical(self, "失败", f"导出启动失败：{e}")
+
+    def _on_merged_export_done(self, exported_files: list):
+        self._update_export_progress(100, "写入完成，正在关闭文件...")
+        QTimer.singleShot(400, lambda: self._hide_export_overlay())
+        export_dir = getattr(self, '_merged_export_dir', "")
+        if len(exported_files) > 1:
+            QTimer.singleShot(500, lambda: self.statusBar.showMessage(
+                f"导出完成：{export_dir}  共 {len(exported_files)} 个文件"))
+            QTimer.singleShot(500, lambda: QMessageBox.information(
+                self, "成功",
+                f"数据已拆分导出为 {len(exported_files)} 个文件：\n\n" +
+                "\n".join([os.path.basename(f) for f in exported_files]) +
+                f"\n\n保存目录：{export_dir}"))
+        else:
+            QTimer.singleShot(500, lambda: self.statusBar.showMessage(
+                f"导出完成：{exported_files[0]}"))
+            QTimer.singleShot(500, lambda: QMessageBox.information(
+                self, "成功", f"已导出到：\n{exported_files[0]}"))
+
+    def _on_merged_export_error(self, err: str):
+        self._hide_export_overlay()
+        self.statusBar.showMessage("导出失败")
+        QMessageBox.critical(self, "失败", f"导出失败：\n{err[:500]}")
 
     def _export_settlement(self):
         """导出结算单汇总"""
@@ -3111,6 +4009,7 @@ class MainWindow(QMainWindow):
             service = ExportService(export_dir=export_dir)
             file_path = service.export_settlement(data, type_, record_id=self.current_record_id)
             self._hide_export_overlay()
+            self.statusBar.showMessage(f"导出完成：{file_path}")
             QMessageBox.information(self, "成功", f"已导出到：\n{file_path}")
         except Exception as e:
             self._hide_export_overlay()
@@ -3156,6 +4055,7 @@ class MainWindow(QMainWindow):
                 self.current_details, type_, group_key, export_dir, self.current_record_id
             )
             self._hide_export_overlay()
+            self.statusBar.showMessage(f"导出完成：{file_path}")
             QMessageBox.information(self, "成功", f"已导出到：\n{file_path}")
         except Exception as e:
             self._hide_export_overlay()
@@ -3192,3 +4092,47 @@ class MainWindow(QMainWindow):
         self.current_record_id = record_id
         self.tabs.setCurrentIndex(1)
         self._load_result(record_id)
+
+    def _clear_history(self):
+        """清空所有历史记录"""
+        session = get_session()
+        try:
+            count = session.query(FeeRecord).count()
+            if count == 0:
+                QMessageBox.information(self, "提示", "没有历史记录可清空")
+                return
+
+            reply = QMessageBox.question(
+                self,
+                "确认清空",
+                f"将删除 {count} 条历史记录（同时清空关联的计算明细数据）。\n\n⚠️ 此操作不可恢复，确定继续吗？",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+            if reply != QMessageBox.Yes:
+                return
+
+            # 级联删除：FeeRecord.cascade="all, delete-orphan" 会自动删除 FeeDetail
+            session.query(FeeRecord).delete(synchronize_session=False)
+            session.commit()
+
+            # 清空内存缓存
+            self.all_record_ids = []
+            if hasattr(self, "_details_cache"):
+                self._details_cache = {}
+
+            # 刷新界面
+            self.history_table.setRowCount(0)
+            if hasattr(self, "result_table"):
+                self.result_table.setRowCount(0)
+            if hasattr(self, "summary_labels"):
+                for key in self.summary_labels:
+                    self.summary_labels[key].setText("0")
+            self.statusBar.showMessage(f"已清空 {count} 条历史记录")
+            QMessageBox.information(self, "成功", f"已清空 {count} 条历史记录")
+        except Exception as e:
+            session.rollback()
+            self.statusBar.showMessage("清空失败")
+            QMessageBox.critical(self, "失败", f"清空失败：{e}")
+        finally:
+            session.close()

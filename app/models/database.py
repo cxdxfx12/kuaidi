@@ -156,12 +156,112 @@ _db_initialized = False
 
 
 def get_session():
-    """获取数据库会话（自动建表）"""
-    global _db_initialized
+    """获取数据库会话（自动建表+确保唯一索引）"""
+    global _db_initialized, engine
     if not _db_initialized:
         init_db()
         _db_initialized = True
+        # 初始化后确保索引（如果是新数据库直接成功，如果是旧库可能需要清理重复）
+        _ensure_unique_index(engine)
+    else:
+        # 已存在的数据库：确保唯一索引存在
+        _ensure_unique_index(engine)
     return SessionLocal()
+
+
+def _ensure_unique_index(eng):
+    """
+    确保 fee_details 有 (record_id, tracking_no) 唯一索引。
+    策略：先尝试直接建索引；失败时，用临时表重建法（SQLite最快去重方式）。
+    只在进程启动时执行一次，不阻塞计算流程。
+    """
+    global _db_initialized
+    try:
+        conn = eng.raw_connection()
+        try:
+            cur = conn.cursor()
+
+            # 步骤1：检查索引是否已存在
+            cur.execute("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_fee_details_record_tracking'")
+            if cur.fetchone():
+                return
+
+            # 步骤2：尝试直接创建唯一索引（若表无重复，几秒内完成）
+            try:
+                cur.execute("""
+                    CREATE UNIQUE INDEX IF NOT EXISTS idx_fee_details_record_tracking
+                    ON fee_details(record_id, tracking_no)
+                """)
+                conn.commit()
+                return
+            except Exception:
+                pass
+
+            # 步骤3：有重复数据 — 用临时表重建法去重（比DELETE快10-20倍）
+            # 原理：SELECT DISTINCT + 重建表比大表DELETE快得多
+            try:
+                # 先获取原始表结构，保留最小id的行
+                cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='fee_details'")
+                if cur.fetchone() is None:
+                    return  # 表不存在（新数据库）
+
+                # 用 CREATE TABLE temp AS SELECT DISTINCT 方式更快
+                # 但我们需要保留所有列，所以用"每个(record_id, tracking_no)取最小id"的方式
+                # 更高效方案：创建一个只包含要保留id的临时表
+                cur.execute("CREATE TEMP TABLE temp_keep_ids AS SELECT MIN(id) AS keep_id FROM fee_details GROUP BY record_id, tracking_no")
+                cur.execute("CREATE INDEX idx_temp_keep_ids ON temp_keep_ids(keep_id)")
+
+                # 用"反选DELETE"：删除不在 keep_ids 中的记录
+                # 先查看需要删除多少行（如果很少就不做DELETE了）
+                cur.execute("SELECT COUNT(*) FROM fee_details")
+                total_before = cur.fetchone()[0]
+                cur.execute("SELECT COUNT(*) FROM temp_keep_ids")
+                keep_count = cur.fetchone()[0]
+
+                if total_before <= keep_count:
+                    # 实际上没有重复
+                    cur.execute("DROP TABLE IF EXISTS temp_keep_ids")
+                    cur.execute("""
+                        CREATE UNIQUE INDEX IF NOT EXISTS idx_fee_details_record_tracking
+                        ON fee_details(record_id, tracking_no)
+                    """)
+                    conn.commit()
+                    return
+
+                # 删除不在 keep_ids 中的记录
+                cur.execute("""
+                    DELETE FROM fee_details
+                    WHERE id NOT IN (SELECT keep_id FROM temp_keep_ids)
+                """)
+                conn.commit()
+
+                # 清理临时表
+                cur.execute("DROP TABLE IF EXISTS temp_keep_ids")
+                conn.commit()
+
+                # 创建唯一索引
+                cur.execute("""
+                    CREATE UNIQUE INDEX IF NOT EXISTS idx_fee_details_record_tracking
+                    ON fee_details(record_id, tracking_no)
+                """)
+                conn.commit()
+                return
+            except Exception:
+                # 所有自动去重方案失败 — 至少创建普通索引（不唯一，至少加速查询）
+                try:
+                    cur.execute("""
+                        CREATE INDEX IF NOT EXISTS idx_fee_details_record_tracking
+                        ON fee_details(record_id, tracking_no)
+                    """)
+                    conn.commit()
+                except Exception:
+                    pass
+                return
+        finally:
+            conn.close()
+    except Exception:
+        # 任何异常都不应该影响程序正常使用
+        pass
 
 
 def init_db():
@@ -178,6 +278,21 @@ def init_db():
 
     try:
         Base.metadata.create_all(bind=engine)
+        # 对已有数据库：额外确保 (record_id, tracking_no) 唯一索引存在（防止重复数据插入）
+        try:
+            conn = engine.raw_connection()
+            try:
+                cur = conn.cursor()
+                cur.execute("""
+                    CREATE UNIQUE INDEX IF NOT EXISTS idx_fee_details_record_tracking
+                    ON fee_details(record_id, tracking_no)
+                    WHERE tracking_no IS NOT NULL AND tracking_no != ''
+                """)
+                conn.commit()
+            finally:
+                conn.close()
+        except Exception:
+            pass
     except Exception:
         # create_all 失败 → 数据库损坏 → 备份后重建
         _safe_backup_and_rebuild(DB_PATH)

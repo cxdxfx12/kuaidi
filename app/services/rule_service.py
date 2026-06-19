@@ -754,49 +754,83 @@ class RuleService:
         fee = round(fee, 2)
         base_fee = fee
 
-        # 第四步：应用活动加价
+        # 第四步：应用活动加价（使用统一的日期解析，支持多种格式）
         promo_name = ""
         promo_amount = 0.0
         try:
             from datetime import datetime
-            today_str = datetime.now().strftime("%Y-%m-%d")
-            today = datetime.strptime(today_str, "%Y-%m-%d")
+            today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+
+            # 统一日期解析函数：支持 2026-06-19 / 2026/6/19 / 2026.6.19 / 20260619 / 2026年6月19日
+            def _parse_date_local(date_str: str):
+                if not date_str:
+                    return None
+                s = str(date_str).strip()
+                if not s:
+                    return None
+                for ch in ["年", "月", "日", ".", "-", "/"]:
+                    s = s.replace(ch, "-")
+                while "--" in s:
+                    s = s.replace("--", "-")
+                s = s.strip("-")
+                parts = s.split("-")
+                if len(parts) >= 3:
+                    try:
+                        return datetime(int(parts[0]), int(parts[1]), int(parts[2]))
+                    except (ValueError, TypeError):
+                        pass
+                if s.isdigit() and len(s) == 8:
+                    try:
+                        return datetime(int(s[:4]), int(s[4:6]), int(s[6:8]))
+                    except (ValueError, TypeError):
+                        pass
+                for fmt in ["%Y-%m-%d", "%Y/%m/%d", "%Y%m%d"]:
+                    try:
+                        return datetime.strptime(str(date_str).strip(), fmt)
+                    except Exception:
+                        continue
+                return None
 
             promo_rules = self.load_promotion_rules()
             for pr in promo_rules:
                 try:
-                    start_str = str(pr.get("start_date", "")).strip()
-                    end_str = str(pr.get("end_date", "")).strip()
-                    if not start_str or not end_str:
+                    start = _parse_date_local(pr.get("start_date", ""))
+                    end = _parse_date_local(pr.get("end_date", ""))
+                    if start is None or end is None:
+                        continue
+                    if not (start <= today <= end):
                         continue
 
-                    start = datetime.strptime(start_str, "%Y-%m-%d")
-                    end = datetime.strptime(end_str, "%Y-%m-%d")
-                    if start <= today <= end:
-                        markup_type = str(pr.get("markup_type", "percent")).strip().lower()
-                        try:
-                            markup_value = float(str(pr.get("markup_value", "0")).strip())
-                        except ValueError:
+                    # 省份限定检查（regions留空=不限定）
+                    regions_val = str(pr.get("regions", "")).strip()
+                    if regions_val and region:
+                        region_kws = [k.strip() for k in regions_val.split(",") if k.strip()]
+                        if region_kws and not any(k in region for k in region_kws):
                             continue
 
-                        if markup_value <= 0:
-                            continue
+                    markup_type = str(pr.get("markup_type", "percent")).strip().lower()
+                    try:
+                        markup_value = float(str(pr.get("markup_value", "0")).strip())
+                    except (ValueError, TypeError):
+                        continue
 
-                        if markup_type == "fixed":
-                            # 固定金额加价：每单加X元
-                            promo_amount = markup_value
-                        elif markup_type == "weight":
-                            # 按重量加价：每kg加X元
-                            promo_amount = weight * markup_value
-                        elif markup_type == "percent":
-                            # 按百分比加价：运费加X%
-                            promo_amount = base_fee * (markup_value / 100.0)
-                        else:
-                            continue
+                    if markup_value <= 0:
+                        continue
 
-                        promo_name = str(pr.get("name", "活动加价"))
-                        promo_amount = round(promo_amount, 2)
-                        break
+                    if markup_type == "fixed":
+                        promo_amount = markup_value
+                    elif markup_type == "weight":
+                        promo_amount = weight * markup_value
+                    elif markup_type == "percent":
+                        promo_amount = base_fee * (markup_value / 100.0)
+                    else:
+                        continue
+
+                    promo_name = str(pr.get("name", "活动加价"))
+                    if regions_val:
+                        promo_name = f"{promo_name}[{regions_val}]"
+                    promo_amount = round(promo_amount, 2)
+                    break
                 except Exception:
                     continue
         except Exception:

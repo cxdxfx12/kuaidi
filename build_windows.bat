@@ -22,6 +22,7 @@ python -m PyInstaller ^
     --hidden-import=PyQt5.QtCore ^
     --hidden-import=PyQt5.QtGui ^
     --hidden-import=PyQt5.QtWidgets ^
+    --hidden-import=xlsxwriter ^
     -y ^
     --clean ^
     main.py

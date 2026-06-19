@@ -1,22 +1,77 @@
-"""PyInstaller Runtime Hook: 提前屏蔽 pkg_resources 的有问题初始化"""
+"""PyInstaller Runtime Hook: 彻底修复 pkg_resources 兼容性问题
+
+问题根源：PyInstaller 3.6 的 pyi_rth_pkgres.py 会尝试导入
+pkg_resources.py2_warn，但新版 setuptools 已移除该模块。
+
+解决方案：在 pyi_rth_pkgres 执行之前，提前注入空模块占位。
+"""
 import sys
 import os
+import types
 
-# 1) 将 _MEIPASS 加入 sys.path，确保运行时能找到内部模块
+# ===== 关键修复：注入空的 py2_warn 模块 =====
+# pyi_rth_pkgres.py 会在 import pkg_resources 前尝试 import pkg_resources.py2_warn
+# 这个模块在新版 setuptools 中已被移除，导致 ImportError
+if 'pkg_resources.py2_warn' not in sys.modules:
+    fake_mod = types.ModuleType('pkg_resources.py2_warn')
+    sys.modules['pkg_resources.py2_warn'] = fake_mod
+
+# 同样处理 pkg_resources.extern 相关的缺失模块
+for mod_name in [
+    'pkg_resources.extern.pyparsing',
+    'pkg_resources.extern.appdirs',
+    'pkg_resources.extern.six',
+    'pkg_resources.extern.six.moves',
+]:
+    if mod_name not in sys.modules:
+        fake_mod = types.ModuleType(mod_name)
+        sys.modules[mod_name] = fake_mod
+
+# ===== 处理 pyimod03_importers 缺失问题 =====
+# pyi_rth_pkgres.py 会尝试 from pyimod03_importers import FrozenImporter
+# 但这个模块在打包后可能无法直接导入
+if 'pyimod03_importers' not in sys.modules:
+    fake_mod = types.ModuleType('pyimod03_importers')
+    fake_mod.FrozenImporter = None
+    sys.modules['pyimod03_importers'] = fake_mod
+
+# ===== 处理 setuptools 相关的缺失模块 =====
+for mod_name in [
+    'setuptools.extern.pyparsing',
+    'setuptools.extern.six',
+    'setuptools.extern.six.moves',
+    'setuptools.extern.packaging',
+    'setuptools.extern.ordered_set',
+]:
+    if mod_name not in sys.modules:
+        fake_mod = types.ModuleType(mod_name)
+        sys.modules[mod_name] = fake_mod
+
+# ===== 将 _MEIPASS 加入 sys.path =====
 meipass = getattr(sys, '_MEIPASS', None)
 if meipass and meipass not in sys.path:
     sys.path.insert(0, meipass)
 
-# 2) Patch pkg_resources：
-#    pyi_rth_pkgres 失败的根源是 pkg_resources.require() / iter_entry_points()
-#    在冻结环境下试图访问不存在的 .egg-info / dist-info 元数据。
-#    这里在它运行前替换相关方法为安全的 no-op。
+# ===== 设置 QT 环境变量 =====
+if meipass:
+    os.environ['QT_PLUGIN_PATH'] = os.path.join(meipass, 'PyQt5', 'Qt', 'plugins')
+    os.environ['QML2_IMPORT_PATH'] = os.path.join(meipass, 'PyQt5', 'Qt', 'qml')
+
+# ===== 安全地执行 pkg_resources 注册逻辑 =====
 try:
-    import pkg_resources
-    # 记录原始方法
-    _orig_require = pkg_resources.require
-    _orig_iter_entry_points = pkg_resources.iter_entry_points
-    _orig_get_distribution = pkg_resources.get_distribution
+    import pkg_resources as res
+    try:
+        from pyimod03_importers import FrozenImporter
+        res.register_loader_type(FrozenImporter, res.NullProvider)
+    except Exception:
+        pass
+    except ImportError:
+        pass
+
+    # Patch pkg_resources 方法为安全版本
+    _orig_require = res.require
+    _orig_iter_entry_points = res.iter_entry_points
+    _orig_get_distribution = res.get_distribution
 
     def _safe_require(*args, **kwargs):
         try:
@@ -34,36 +89,16 @@ try:
         try:
             return _orig_get_distribution(*args, **kwargs)
         except Exception:
-            class _FakeDist(object):
+            class _FakeDist:
                 version = "0.0.0"
                 project_name = "unknown"
                 def __str__(self):
                     return "unknown 0.0.0"
             return _FakeDist()
 
-    # 应用 patch
-    pkg_resources.require = _safe_require
-    pkg_resources.iter_entry_points = _safe_iter_entry_points
-    pkg_resources.get_distribution = _safe_get_distribution
-
-    # 3) 防止 pkg_resources 的 working_set 初始化失败
-    try:
-        ws = pkg_resources.working_set
-        ws.require = _safe_require
-    except Exception:
-        pass
+    res.require = _safe_require
+    res.iter_entry_points = _safe_iter_entry_points
+    res.get_distribution = _safe_get_distribution
 
 except Exception:
-    # pkg_resources 不存在时（被排除了），什么都不做
     pass
-
-# 4) Patch setuptools 的 distutils 重定向（若存在）
-try:
-    import setuptools
-except Exception:
-    pass
-
-# 5) 设置 QT 环境变量（防止 PyQt5 在某些环境下找不到插件）
-if meipass:
-    os.environ['QT_PLUGIN_PATH'] = os.path.join(meipass, 'PyQt5', 'Qt', 'plugins')
-    os.environ['QML2_IMPORT_PATH'] = os.path.join(meipass, 'PyQt5', 'Qt', 'qml')
