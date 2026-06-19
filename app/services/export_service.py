@@ -185,7 +185,7 @@ class ExportService:
                     weight = r[6]
                     fee = r[10]
 
-                    ws.write(row_num, 0, r[2])                       # 行号
+                    ws.write(row_num, 0, row_num)                    # 行号（本文件内从1递增，不依赖数据库row_index）
                     ws.write(row_num, 1, business_date)               # 业务日期
                     ws.write(row_num, 2, _clean_str(r[3]))            # 快递单号
                     ws.write(row_num, 3, _clean_str(r[7]))            # 区域
@@ -204,6 +204,20 @@ class ExportService:
             # 最终进度上报
             if progress_callback:
                 progress_callback(100, f"✅ 导出完成：共 {written:,} 行（数据库 {total:,} 行）")
+
+            # ===== 方案A：导出成功后，清理 fee_details 明细（保留 fee_record 概要）=====
+            try:
+                cur_delete = conn.cursor()
+                cur_delete.execute(
+                    "DELETE FROM fee_details WHERE record_id = ?", (record_id,)
+                )
+                conn.commit()
+                deleted_count = cur_delete.rowcount
+                cur_delete.close()
+                if progress_callback:
+                    progress_callback(100, f"✅ 已清理 {written:,} 条明细数据（节省空间）")
+            except Exception:
+                pass
 
         finally:
             session.close()
@@ -492,7 +506,7 @@ class ExportService:
                         weight = r[6]
                         fee = r[10]
 
-                        ws.write(excel_row, 0, r[2])                       # 行号
+                        ws.write(excel_row, 0, excel_row)              # 行号（本文件内从1递增，不依赖数据库row_index）
                         ws.write(excel_row, 1, business_date)               # 业务日期
                         ws.write(excel_row, 2, _clean_str(r[3]))            # 快递单号
                         ws.write(excel_row, 3, _clean_str(r[7]))            # 区域
@@ -515,6 +529,21 @@ class ExportService:
 
             if progress_callback:
                 progress_callback(100, f"✅ 导出完成：共 {processed:,} 行，{len(exported_files)} 个文件")
+
+            # ===== 方案A：合并导出成功后，清理所有涉及的 record_id 的明细（保留 fee_record 概要）
+            try:
+                cur_del = conn.cursor()
+                placeholders = ",".join(["?"] * len(record_ids))
+                cur_del.execute(
+                    f"DELETE FROM fee_details WHERE record_id IN ({placeholders})",
+                    tuple(record_ids)
+                )
+                conn.commit()
+                cur_del.close()
+                if progress_callback:
+                    progress_callback(100, f"✅ 已清理 {len(record_ids)} 个文件的明细数据（节省空间）")
+            except Exception:
+                pass
 
             return exported_files
 

@@ -4094,27 +4094,49 @@ class MainWindow(QMainWindow):
         self._load_result(record_id)
 
     def _clear_history(self):
-        """清空所有历史记录"""
+        """清空所有历史记录（场景3：一键重置，不碰规则配置）"""
+        from sqlalchemy import text
+
         session = get_session()
         try:
-            count = session.query(FeeRecord).count()
-            if count == 0:
+            # 先统计两条数据量，给用户明确提示
+            conn = session.connection().connection
+            cur = conn.cursor()
+            cur.execute("SELECT COUNT(*) FROM fee_details")
+            detail_count = cur.fetchone()[0]
+            cur.close()
+
+            record_count = session.query(FeeRecord).count()
+
+            if record_count == 0 and detail_count == 0:
                 QMessageBox.information(self, "提示", "没有历史记录可清空")
                 return
 
             reply = QMessageBox.question(
                 self,
                 "确认清空",
-                f"将删除 {count} 条历史记录（同时清空关联的计算明细数据）。\n\n⚠️ 此操作不可恢复，确定继续吗？",
+                f"将删除以下数据（用原生SQL直接删除，速度快）：\n\n"
+                f"  • 历史记录概要：{record_count:,} 条（fee_records 表）\n"
+                f"  • 计算明细：{detail_count:,} 条（fee_details 表）\n\n"
+                f"✅ 保留：客户/网点/区域/全局 计费规则配置（fee_rules）\n"
+                f"✅ 保留：其他系统配置\n\n"
+                f"⚠️ 此操作不可恢复，确定继续吗？",
                 QMessageBox.Yes | QMessageBox.No,
                 QMessageBox.No
             )
             if reply != QMessageBox.Yes:
                 return
 
-            # 级联删除：FeeRecord.cascade="all, delete-orphan" 会自动删除 FeeDetail
-            session.query(FeeRecord).delete(synchronize_session=False)
-            session.commit()
+            # 两步删除：先清明细（大表），再清记录。用原生SQL，跳过ORM对象级联，快得多
+            cursor = conn.cursor()
+            try:
+                cursor.execute("DELETE FROM fee_details")
+                deleted_detail = cursor.rowcount
+                cursor.execute("DELETE FROM fee_records")
+                deleted_record = cursor.rowcount
+                conn.commit()
+            finally:
+                cursor.close()
 
             # 清空内存缓存
             self.all_record_ids = []
@@ -4128,10 +4150,21 @@ class MainWindow(QMainWindow):
             if hasattr(self, "summary_labels"):
                 for key in self.summary_labels:
                     self.summary_labels[key].setText("0")
-            self.statusBar.showMessage(f"已清空 {count} 条历史记录")
-            QMessageBox.information(self, "成功", f"已清空 {count} 条历史记录")
+
+            self.statusBar.showMessage(f"已清空：{deleted_record:,} 条记录 / {deleted_detail:,} 条明细")
+            QMessageBox.information(
+                self,
+                "成功",
+                f"已清空历史数据：\n\n"
+                f"  • 记录：{deleted_record:,} 条\n"
+                f"  • 明细：{deleted_detail:,} 条\n\n"
+                f"✅ 规则配置未受影响"
+            )
         except Exception as e:
-            session.rollback()
+            try:
+                session.rollback()
+            except Exception:
+                pass
             self.statusBar.showMessage("清空失败")
             QMessageBox.critical(self, "失败", f"清空失败：{e}")
         finally:
