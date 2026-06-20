@@ -67,12 +67,13 @@ def apply_weight_rounding(weight: float, mode: str, params: Optional[Dict] = Non
 
 class Rule:
     """单条计费规则"""
-    def __init__(self, name: str = "", regions: str = "", stations: str = "", 
-                 min_weight: float = 0.0, max_weight: float = 999.0, 
-                 first_fee: float = 0.0, continued_fee: float = 0.0, 
+    def __init__(self, name: str = "", regions: str = "", stations: str = "",
+                 min_weight: float = 0.0, max_weight: float = 999.0,
+                 first_fee: float = 0.0, continued_fee: float = 0.0,
                  min_fee: float = 0.0, rule_type: str = "region",
                  continued_unit: str = "kg", weight_rounding: str = "actual",
-                 rounding_params: Optional[Dict] = None):
+                 rounding_params: Optional[Dict] = None,
+                 计泡系数: float = 6000.0):
         """
         :param name: 规则名称
         :param regions: 逗号分隔的区域关键词，如 "上海,江苏,浙江"
@@ -81,6 +82,7 @@ class Rule:
         :param continued_unit: 续重单位: "kg"(全续), "100g"(百克续)
         :param weight_rounding: 重量进位模式: "actual", "round_05", "round_1", "ceil_1kg", "segmented", "round_trunc"
         :param rounding_params: 进位参数: {"segment_drop": 0.2, "segment_ceil": 0.7, "direction": "drop"}
+        :param 计泡系数: 体积重除数，默认6000
         """
         self.name = name
         self.regions = regions
@@ -94,6 +96,7 @@ class Rule:
         self.continued_unit = continued_unit  # "kg" or "100g"
         self.weight_rounding = weight_rounding  # 重量进位模式
         self.rounding_params = rounding_params or {}  # 进位参数
+        self.计泡系数 = float(计泡系数)  # 体积重除数
 
     def matches(self, region: str = "", station_code: str = "", weight: float = 0.0) -> bool:
         """判断是否匹配该规则"""
@@ -131,6 +134,7 @@ class Rule:
             "continued_unit": self.continued_unit,
             "weight_rounding": self.weight_rounding,
             "rounding_params": self.rounding_params,
+            "计泡系数": self.计泡系数,
         }
 
     @classmethod
@@ -148,6 +152,7 @@ class Rule:
             continued_unit=data.get("continued_unit", "kg"),
             weight_rounding=data.get("weight_rounding", "actual"),
             rounding_params=data.get("rounding_params", {}),
+            计泡系数=float(data.get("计泡系数", 6000)),
         )
 
 

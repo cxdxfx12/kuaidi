@@ -1610,19 +1610,20 @@ class MainWindow(QMainWindow):
 
         # 客户规则采用简化分组表（14个组覆盖34省+港澳台）
         self.station_rule_table = QTableWidget()
-        self.station_rule_table.setColumnCount(7)
+        self.station_rule_table.setColumnCount(8)
         self.station_rule_table.setHorizontalHeaderLabels(
-            ["分组名称", "涵盖省份", "首重费(元)", "续重费(元)", "保底费(元)", "续重单位", "重量进位"]
+            ["分组名称", "涵盖省份", "首重费(元)", "续重费(元)", "保底费(元)", "续重单位", "重量进位", "计泡系数"]
         )
         self.station_rule_table.horizontalHeader().setStretchLastSection(False)
         # 为每列设置最小宽度，避免右侧文字被截断
         self.station_rule_table.setColumnWidth(0, 100)
-        self.station_rule_table.setColumnWidth(1, 320)
-        self.station_rule_table.setColumnWidth(2, 95)
-        self.station_rule_table.setColumnWidth(3, 95)
-        self.station_rule_table.setColumnWidth(4, 95)
-        self.station_rule_table.setColumnWidth(5, 115)
-        self.station_rule_table.setColumnWidth(6, 140)
+        self.station_rule_table.setColumnWidth(1, 260)
+        self.station_rule_table.setColumnWidth(2, 80)
+        self.station_rule_table.setColumnWidth(3, 80)
+        self.station_rule_table.setColumnWidth(4, 80)
+        self.station_rule_table.setColumnWidth(5, 100)
+        self.station_rule_table.setColumnWidth(6, 110)
+        self.station_rule_table.setColumnWidth(7, 140)
         self.station_rule_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Interactive)
         self.station_rule_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self.station_rule_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Interactive)
@@ -1978,7 +1979,8 @@ class MainWindow(QMainWindow):
                         self._station_province_cache[code] = {}
                     if province:
                         self._station_province_cache[code][province] = (
-                            r.first_fee, r.continued_fee, r.min_fee, r.continued_unit, r.weight_rounding
+                            r.first_fee, r.continued_fee, r.min_fee, r.continued_unit, r.weight_rounding,
+                            getattr(r, '计泡系数', 6000.0)
                         )
 
             # 判断每个客户是"继承区域"还是"专属规则"
@@ -2390,6 +2392,23 @@ class MainWindow(QMainWindow):
                     rounding_combo.setEnabled(False)
                 self.station_rule_table.setCellWidget(row, 6, rounding_combo)
 
+                # 计泡系统 QComboBox（列7）
+                vol_div_combo = QComboBox()
+                vol_div_combo.addItems(["6000（顺丰/京东/德邦）", "8000（圆通/中通/韵达）", "5000（EMS）", "12000（大件轻抛）"])
+                vol_div_combo.setMinimumHeight(26)
+                # 从缓存读取计泡系数，找不到则默认6000
+                vol_div_value = 6000
+                for province in provinces:
+                    if province in cached_data:
+                        data = cached_data[province]
+                        if len(data) >= 6:
+                            vol_div_value = data[5]
+                            break
+                vol_div_text = f"{int(vol_div_value)}（" + ["6000（顺丰/京东/德邦）", "8000（圆通/中通/韵达）", "5000（EMS）", "12000（大件轻抛）"][
+                    {6000: 0, 8000: 1, 5000: 2, 12000: 3}.get(vol_div_value, 0)]
+                vol_div_combo.setCurrentText(vol_div_text)
+                self.station_rule_table.setCellWidget(row, 7, vol_div_combo)
+
             except Exception as row_err:
                 import logging
                 logging.warning(f"填充分组 [{gname}] 时出错: {row_err}")
@@ -2677,6 +2696,11 @@ class MainWindow(QMainWindow):
             if item:
                 item.setFlags(item.flags() | Qt.ItemIsEditable)
 
+        # 计泡系数（列7）- 全局规则只读显示默认值6000
+        vol_div_item = QTableWidgetItem("6000（默认）")
+        vol_div_item.setFlags(vol_div_item.flags() & ~Qt.ItemIsEditable)
+        self.station_rule_table.setItem(row, 7, vol_div_item)
+
     def _add_station(self):
         """新增客户"""
         code, ok = QInputDialog.getText(self, "新增客户", "请输入客户编码:")
@@ -2936,6 +2960,7 @@ class MainWindow(QMainWindow):
                                     r.first_fee, r.continued_fee, r.min_fee,
                                     r.continued_unit or "kg",
                                     r.weight_rounding or "actual",
+                                    getattr(r, '计泡系数', 6000.0),
                                 ]
 
             # 6. 自动选中第一个客户并刷新右侧
@@ -2978,12 +3003,16 @@ class MainWindow(QMainWindow):
                 if code in self._station_province_cache and self._station_province_cache[code]:
                     # 专属规则 - 每个省份一条
                     for province, data in self._station_province_cache[code].items():
-                        if len(data) >= 5:
+                        if len(data) >= 6:
+                            first_fee, continued_fee, min_fee, continued_unit, weight_rounding, vol_div = data
+                        elif len(data) >= 5:
                             first_fee, continued_fee, min_fee, continued_unit, weight_rounding = data
+                            vol_div = 6000.0
                         else:
                             first_fee, continued_fee, min_fee = data[:3]
                             continued_unit = data[3] if len(data) > 3 else "kg"
                             weight_rounding = "actual"
+                            vol_div = 6000.0
                         rule = Rule(
                             name=f"{name} - {province}",
                             regions=province,
@@ -2995,7 +3024,8 @@ class MainWindow(QMainWindow):
                             min_fee=float(min_fee),
                             rule_type="station",
                             continued_unit=continued_unit,
-                            weight_rounding=weight_rounding
+                            weight_rounding=weight_rounding,
+                            计泡系数=vol_div,
                         )
                         all_rules.append(rule)
                 else:
@@ -3130,6 +3160,17 @@ class MainWindow(QMainWindow):
             else:
                 rounding_code = "actual"
 
+            # 计泡系数（列7）
+            vol_div_widget = self.station_rule_table.cellWidget(table_row, 7)
+            if vol_div_widget and isinstance(vol_div_widget, QComboBox):
+                vol_div_text = vol_div_widget.currentText()
+                # 从文本中提取数字，如 "6000（顺丰/京东/德邦）" -> 6000
+                import re
+                m = re.search(r'\d+', vol_div_text)
+                vol_div_code = float(m.group()) if m else 6000.0
+            else:
+                vol_div_code = 6000.0
+
             # 找到该分组对应的省份列表
             target_provinces = []
             for (gn, provs, *_) in PROVINCE_GROUPS:
@@ -3141,7 +3182,7 @@ class MainWindow(QMainWindow):
                 target_provinces = [p for p in provinces_text.replace("、", " ").split() if p]
 
             for province in target_provinces:
-                province_data[province] = (first_fee, continued_fee, min_fee, unit_code, rounding_code)
+                province_data[province] = (first_fee, continued_fee, min_fee, unit_code, rounding_code, vol_div_code)
 
         if province_data:
             self._station_province_cache[station_code] = province_data
