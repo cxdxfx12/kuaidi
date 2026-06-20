@@ -75,6 +75,7 @@ def _build_rule_indexes(force_reload: bool = False):
     global _STATION_WITH_REGION_LIST, _REGION_MAP, _GLOBAL_RULES, _PROMOTION_RULES
     global _PROMOTION_CACHE, _EMPTY_WEIGHT_FEE, _RULES_LOADED
     global _计泡系数_MAP, _DEFAULT_计泡系数
+    import json as _json
 
     if _RULES_LOADED and not force_reload:
         return
@@ -89,16 +90,71 @@ def _build_rule_indexes(force_reload: bool = False):
         _RULES_LOADED = True
         return
 
-    # 从 fee_rules.json 加载计泡系数配置
+    # 从 default_settings.json 加载计泡系数（优先级1：用户全局默认设置）
     try:
-        import json as _json
-        _fee_rules_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-                                        "data", "config", "fee_rules.json")
-        if os.path.exists(_fee_rules_path):
-            with open(_fee_rules_path, "r", encoding="utf-8") as _f:
+        from app.models.path_config import get_config_file
+        _default_path = get_config_file("default_settings.json")
+        if os.path.exists(_default_path):
+            with open(_default_path, "r", encoding="utf-8") as _f:
+                _default_data = _json.load(_f)
+            if "vol_divisor" in _default_data:
+                _DEFAULT_计泡系数 = float(_default_data.get("vol_divisor", 6000))
+    except Exception:
+        pass
+
+    # 从 fee_rules.json 加载计泡系数配置（优先级2）
+    # 优先读用户数据目录（AppData），同时从打包资源补充缺失字段
+    try:
+        from app.models.path_config import get_config_file, get_resource_path
+
+        # 从打包资源获取最新默认值（AppData 可能是旧版本）
+        _resource_data = None
+        _resource_default_vol = None
+        _resource_path = get_resource_path("data", "config", "fee_rules.json")
+        if os.path.exists(_resource_path):
+            with open(_resource_path, "r", encoding="utf-8") as _f:
+                _resource_data = _json.load(_f)
+            _resource_default_vol = _resource_data.get("default_计泡系数")
+
+        # 从用户数据目录读取（可能有用户自定义规则）
+        _user_path = get_config_file("fee_rules.json")
+        if os.path.exists(_user_path):
+            with open(_user_path, "r", encoding="utf-8") as _f:
                 _fee_data = _json.load(_f)
-            _DEFAULT_计泡系数 = float(_fee_data.get("default_计泡系数", 6000))
-            _计泡系数_MAP = {}
+            # 从资源文件补充缺失字段（AppData 可能是旧版本）
+            _need_write_back = False
+            # 1. 补充 default_计泡系数
+            if _fee_data.get("default_计泡系数") is None and _resource_default_vol is not None:
+                _fee_data["default_计泡系数"] = _resource_default_vol
+                _need_write_back = True
+            # 2. 补充 计泡系数_MAP（网点→计泡系数映射，v2.2+ 新增字段）
+            if "计泡系数_MAP" not in _fee_data and _resource_data and "计泡系数_MAP" in _resource_data:
+                _fee_data["计泡系数_MAP"] = _resource_data["计泡系数_MAP"]
+                _need_write_back = True
+            # 3. 写回 AppData（下次不再重复补充）
+            if _need_write_back:
+                try:
+                    with open(_user_path, "w", encoding="utf-8") as _f:
+                        _json.dump(_fee_data, _f, ensure_ascii=False, indent=2)
+                except Exception:
+                    pass
+        else:
+            # AppData 没有，用打包资源的规则
+            _fee_data = _resource_data
+
+        # 设置全局默认值
+        if _fee_data and _fee_data.get("default_计泡系数") is not None and _DEFAULT_计泡系数 == 6000:
+            _DEFAULT_计泡系数 = float(_fee_data["default_计泡系数"])
+
+        # 构建计泡系数 MAP
+        # 1. 从计泡系数_MAP字段加载（网点名称→计泡系数映射，如 顺丰→6000）
+        _计泡系数_MAP = {}
+        if _fee_data:
+            _map_from_field = _fee_data.get("计泡系数_MAP", {})
+            for _k, _v in _map_from_field.items():
+                _计泡系数_MAP[_k] = float(_v)
+        # 2. 从rules里读取（每条规则专属的计泡系数，覆盖全局MAP）
+        if _fee_data:
             for _rule in _fee_data.get("rules", []):
                 _vd = float(_rule.get("计泡系数", _DEFAULT_计泡系数))
                 _stations_str = _rule.get("stations", "")
@@ -106,12 +162,8 @@ def _build_rule_indexes(force_reload: bool = False):
                     for _s in _stations_str.split(","):
                         _s = _s.strip()
                         if _s:
-                            _计泡系数_MAP[_s] = _vd
-        else:
-            _DEFAULT_计泡系数 = 6000
-            _计泡系数_MAP = {}
+                            _计泡系数_MAP[_s] = _vd  # 规则内的值优先级更高
     except Exception:
-        _DEFAULT_计泡系数 = 6000
         _计泡系数_MAP = {}
 
     _STATION_CODE_MAP = {}     # 客户编码索引
@@ -192,6 +244,9 @@ def _build_rule_indexes(force_reload: bool = False):
                     continue
 
                 regions_val = str(pr.get("regions", "")).strip()
+                # 统一中文逗号"，"→ 英文逗号","，避免用户输入混淆
+                if regions_val:
+                    regions_val = regions_val.replace("，", ",")
                 region_kws = tuple(k.strip() for k in regions_val.split(",") if k.strip()) if regions_val else ()
 
                 markup_type_str = str(pr.get("markup_type", "percent")).strip().lower()
@@ -291,20 +346,27 @@ def _parse_date(date_str: str):
     return None
 
 
-def _apply_promotion(base_fee: float, weight: float, region_str: str = "") -> Tuple[float, str]:
-    """统一应用活动加价规则（使用预解析缓存，避免每行重复解析日期/字符串）"""
+def _apply_promotion(base_fee: float, weight: float, region_str: str = "",
+                     business_date: Optional[datetime] = None) -> Tuple[float, str]:
+    """统一应用活动加价规则（使用预解析缓存，避免每行重复解析日期/字符串）
+    - 优先使用 Excel 中的业务日期（快递单日期）判断活动期间
+    - 业务日期为空时，fallback 到当前日期
+    """
     if not _PROMOTION_CACHE:
         return base_fee, ""
 
     try:
-        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        if business_date is not None:
+            check_date = business_date
+        else:
+            check_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
         region_str = region_str or ""
 
         for entry in _PROMOTION_CACHE:
             # entry = (start, end, markup_type_int, markup_value, region_kws, promo_name, region_note)
             start = entry[0]
             end = entry[1]
-            if not (start <= today <= end):
+            if not (start <= check_date <= end):
                 continue
 
             # 区域限定检查：region_kws 是 tuple，空表示不限定
@@ -404,7 +466,8 @@ def _read_excel_fast(file_path: str, sheet_name: Optional[str] = None) -> Tuple[
 
 
 def match_rule_fast(weight: float, region: str, station_code: str = "", station_name: str = "",
-                     customer_code: str = "", customer_name: str = "") -> Tuple[float, str, bool]:
+                     customer_code: str = "", customer_name: str = "",
+                     business_date: Optional[datetime] = None) -> Tuple[float, str, bool]:
     """
     规则匹配核心函数（模块级，方便多进程调用）
     匹配优先级（从高到低）：
@@ -423,7 +486,7 @@ def match_rule_fast(weight: float, region: str, station_code: str = "", station_
     if weight is None or weight <= 0:
         base_fee = _EMPTY_WEIGHT_FEE
         rule_name = "无重量默认价"
-        final_fee, promo_suffix = _apply_promotion(base_fee, weight, region or "")
+        final_fee, promo_suffix = _apply_promotion(base_fee, weight, region or "", business_date)
         if promo_suffix:
             return final_fee, f"{rule_name} {promo_suffix}", False
         return final_fee, rule_name, False
@@ -537,10 +600,47 @@ def match_rule_fast(weight: float, region: str, station_code: str = "", station_
         return 0.0, "无匹配规则", True
 
     # 最后统一应用活动加价
-    final_fee, promo_suffix = _apply_promotion(base_fee, weight, region_str)
+    final_fee, promo_suffix = _apply_promotion(base_fee, weight, region_str, business_date)
     if promo_suffix:
         return final_fee, f"{rule_name} {promo_suffix}", False
     return final_fee, rule_name, False
+
+
+# ============================================
+# 辅助函数：根据快递公司/网点名称模糊匹配计泡系数
+# ============================================
+def _find_计泡系数(station_code: str, station_name: str,
+                 courier_code: str = "", courier_name: str = "") -> float:
+    """
+    模糊匹配计泡系数：遍历计泡系数_MAP，查找 key 是否出现在相关字段中
+    匹配优先级（从高到低）：
+      1. courier_code 精确匹配（快递公司编码，如 SF、YTO）
+      2. courier_name 模糊匹配（快递公司名称，如 顺丰、圆通速递）
+      3. station_code 精确匹配（网点编码，如 SF001）
+      4. station_name 模糊匹配（网点名称，如 圆通速递杭州分部）
+    - 返回匹配到的计泡系数，否则返回默认的 _DEFAULT_计泡系数
+    """
+    # ---------- 级别1：快递公司编码精确匹配 ----------
+    if courier_code and courier_code in _计泡系数_MAP:
+        return _计泡系数_MAP[courier_code]
+
+    # ---------- 级别2：快递公司名称模糊匹配 ----------
+    if courier_name:
+        for key in sorted(_计泡系数_MAP.keys(), key=len, reverse=True):
+            if key in courier_name:
+                return _计泡系数_MAP[key]
+
+    # ---------- 级别3：网点编码精确匹配 ----------
+    if station_code and station_code in _计泡系数_MAP:
+        return _计泡系数_MAP[station_code]
+
+    # ---------- 级别4：网点名称模糊匹配 ----------
+    if station_name:
+        for key in sorted(_计泡系数_MAP.keys(), key=len, reverse=True):
+            if key in station_name:
+                return _计泡系数_MAP[key]
+
+    return _DEFAULT_计泡系数
 
 
 # ============================================
@@ -600,10 +700,9 @@ def _process_chunk(args):
                     if vol_weight_str:
                         vol_weight = float(vol_weight_str)
                     else:
-                        # 通过 station_code 或 station_name 查找除数
-                        divisor = _计泡系数_MAP.get(station_code) or \
-                                  _计泡系数_MAP.get(station_name) or \
-                                  _DEFAULT_计泡系数
+                        # 通过模糊匹配查找计泡系数
+                        divisor = _find_计泡系数(station_code, station_name,
+                                               courier_code, courier_name)
                         vol_weight = (length * width * height) / divisor
                     # 取较大值为计费重量
                     if vol_weight > billing_weight:
@@ -616,9 +715,13 @@ def _process_chunk(args):
             except (ValueError, TypeError):
                 quantity = 1
 
+            # 解析业务日期（用于活动加价期间判断）
+            biz_date = _parse_date(raw_date) if raw_date else None
+
             fee, rule_name, is_exc = match_rule_fast(billing_weight, region_name,
                                                       station_code, station_name,
-                                                      raw_customer_code, raw_customer)
+                                                      raw_customer_code, raw_customer,
+                                                      biz_date)
 
             extra_data = None
             if raw_date or raw_customer_code or raw_customer:
@@ -868,6 +971,10 @@ class CalculateService:
                 cpu_count = mp.cpu_count()
                 pool_size = max(1, min(cpu_count - 1, 8))
 
+                # 保存备份引用（以防 multiprocessing 失败时回退到单进程）
+                backup_rows = all_row_tuples
+                mp_failed = False
+
                 report(20, f"大数据模式：启动 {pool_size} 个进程并行计算 "
                            f"（CPU {cpu_count}核）")
 
@@ -899,41 +1006,94 @@ class CalculateService:
                 # 应用层去重集合：确保同一批次不会重复写入
                 inserted_tracking = set()
 
-                with mp.Pool(processes=pool_size) as pool:
-                    for chunk_results in pool.imap_unordered(_process_chunk, chunks, chunksize=1):
-                        for b_start in range(0, len(chunk_results), BATCH_SIZE):
-                            b_end = min(b_start + BATCH_SIZE, len(chunk_results))
-                            batch_to_insert = []
-                            for r in chunk_results[b_start:b_end]:
-                                is_exc = r[14]
-                                t_no = r[1] or ""  # tracking_no
-                                # 应用层去重：同一record_id下不重复单号
-                                if t_no and t_no in inserted_tracking:
-                                    continue
-                                if t_no:
-                                    inserted_tracking.add(t_no)
-                                if is_exc:
-                                    exception_count += 1
-                                else:
-                                    success_count += 1
-                                    total_fee += Decimal(str(r[12]))
-                                batch_to_insert.append((
-                                    record_id,
-                                    r[0], r[1], r[2], r[3], r[4],
-                                    r[5], r[6], r[7], r[8], r[9],
-                                    r[10], r[11], r[12], r[13],
-                                    is_exc, r[15], r[16],
-                                ))
-                            self._bulk_insert_details(session, batch_to_insert)
-                            # 懒提交：累积到50万行才真正flush磁盘
-                            mp_conn = session.connection().connection
-                            _lazy_commit_if_needed(mp_conn, len(batch_to_insert))
+                try:
+                    # 使用 concurrent.futures.ProcessPoolExecutor（比 multiprocessing.Pool 更稳定）
+                    from concurrent.futures import ProcessPoolExecutor, as_completed
+                    with ProcessPoolExecutor(max_workers=pool_size) as executor:
+                        # 提交所有任务，用 as_completed 实现类似 imap_unordered 的无序迭代
+                        future_to_chunk = {executor.submit(_process_chunk, chunk): idx
+                                          for idx, chunk in enumerate(chunks)}
+                        for future in as_completed(future_to_chunk):
+                            try:
+                                chunk_results = future.result()
+                            except Exception as chunk_err:
+                                # 单个 chunk 失败不影响其他，继续处理
+                                continue
 
-                        processed += len(chunk_results)
-                        progress = 22 + min(processed / total_to_process, 1.0) * 68
-                        report(progress,
-                               f"并行计算中... {processed:,}/{total_to_process:,} 行 "
-                               f"({int(progress)}%)  成功 {success_count:,}，异常 {exception_count:,}")
+                            for b_start in range(0, len(chunk_results), BATCH_SIZE):
+                                b_end = min(b_start + BATCH_SIZE, len(chunk_results))
+                                batch_to_insert = []
+                                for r in chunk_results[b_start:b_end]:
+                                    is_exc = r[14]
+                                    t_no = r[1] or ""
+                                    if t_no and t_no in inserted_tracking:
+                                        continue
+                                    if t_no:
+                                        inserted_tracking.add(t_no)
+                                    if is_exc:
+                                        exception_count += 1
+                                    else:
+                                        success_count += 1
+                                        total_fee += Decimal(str(r[12]))
+                                    batch_to_insert.append((
+                                        record_id,
+                                        r[0], r[1], r[2], r[3], r[4],
+                                        r[5], r[6], r[7], r[8], r[9],
+                                        r[10], r[11], r[12], r[13],
+                                        is_exc, r[15], r[16],
+                                    ))
+                                self._bulk_insert_details(session, batch_to_insert)
+                                mp_conn = session.connection().connection
+                                _lazy_commit_if_needed(mp_conn, len(batch_to_insert))
+
+                            processed += len(chunk_results)
+                            progress = 22 + min(processed / total_to_process, 1.0) * 68
+                            report(progress,
+                                   f"并行计算中... {processed:,}/{total_to_process:,} 行 "
+                                   f"({int(progress)}%)  成功 {success_count:,}，异常 {exception_count:,}")
+
+                except Exception as mp_err:
+                    # multiprocessing 启动失败，回退到单进程模式
+                    mp_failed = True
+                    report(25, f"多进程模式启动失败，回退到单进程模式... 原因: {str(mp_err)[:100]}")
+
+                if mp_failed:
+                    # 回退到单进程
+                    report(25, f"单进程模式：开始计算 {row_count:,} 行...")
+                    # 重置计数器
+                    success_count = 0
+                    exception_count = 0
+                    total_fee = Decimal("0")
+                    inserted_tracking = set()
+
+                    results = _process_chunk((backup_rows, None))
+
+                    for b_start in range(0, len(results), BATCH_SIZE):
+                        b_end = min(b_start + BATCH_SIZE, len(results))
+                        batch_to_insert = []
+                        for r in results[b_start:b_end]:
+                            is_exc = r[14]
+                            t_no = r[1] or ""
+                            if t_no and t_no in inserted_tracking:
+                                continue
+                            if t_no:
+                                inserted_tracking.add(t_no)
+                            if is_exc:
+                                exception_count += 1
+                            else:
+                                success_count += 1
+                                total_fee += Decimal(str(r[12]))
+                            batch_to_insert.append((
+                                record_id,
+                                r[0], r[1], r[2], r[3], r[4],
+                                r[5], r[6], r[7], r[8], r[9],
+                                r[10], r[11], r[12], r[13],
+                                is_exc, r[15], r[16],
+                            ))
+                        self._bulk_insert_details(session, batch_to_insert)
+                        _lazy_commit_if_needed(session.connection().connection, len(batch_to_insert))
+
+                    report(90, f"单进程完成。成功 {success_count:,}，异常 {exception_count:,}")
 
                 # 多进程结束：最后一批强制提交
                 _lazy_commit_if_needed(session.connection().connection, 0, force_now=True)

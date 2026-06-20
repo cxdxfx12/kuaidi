@@ -17,11 +17,14 @@ release/
 _build_work/
 _temp_appdata/
 SFeeSystem_data/
+macos_build/
 *.rar
 *.zip
 *.tar.gz
+*.tgz
 *.7z
 *.exe
+*.dmg
 
 # ================ Python 缓存 ================
 __pycache__/
@@ -57,6 +60,19 @@ _launch_mac.py
 _mac_*.py
 _probe_mac.py
 _quick_mac.py
+_add_volume_*.py
+_build_mac*.py
+_build_win.py
+_check_creds.py
+_check_errors.py
+_compare_config.py
+_download_*.py
+_final_test.py
+_find_xlsx.py
+_full_test.py
+_git_commit*.py
+_update_rules.py
+_verify_*.py
 test_calculate.py
 test_mainwindow.py
 test_path.py
@@ -67,6 +83,13 @@ test_statusbar.py
 test_table.py
 test_ui.py
 test_template.xlsx
+test_full_flow.py
+test_*.py
+build_mac.py
+macos_remote_build.py
+make_dmg.py
+create_github_release.py
+*.bat
 
 # ================ 编辑器/系统 ================
 .idea/

@@ -131,6 +131,137 @@ class FilePreviewWorker(QThread):
             self.error.emit(str(e))
 
 
+class DropZone(QFrame):
+    """文件拖拽区域 - 支持拖入文件，也可显示已选择的文件列表"""
+    files_dropped = pyqtSignal(list)  # 拖入后发出信号，携带文件路径列表
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAcceptDrops(True)
+        self._has_selection = False
+
+        # 布局 - 垂直居中
+        layout = QVBoxLayout(self)
+        layout.setAlignment(Qt.AlignCenter)
+        layout.setContentsMargins(20, 15, 20, 15)
+
+        # 主标签
+        self._main_label = QLabel("📄 请把账单Excel文件拖入框中")
+        self._main_label.setAlignment(Qt.AlignCenter)
+        self._main_label.setWordWrap(True)
+        self._main_label.setStyleSheet("""
+            font-size: 14px;
+            color: #94a3b8;
+            font-weight: 500;
+        """)
+
+        # 副标签
+        self._sub_label = QLabel("或点击右侧「选择Excel文件」按钮（最多5个，支持 .xlsx / .xls / .csv）")
+        self._sub_label.setAlignment(Qt.AlignCenter)
+        self._sub_label.setStyleSheet("""
+            font-size: 11px;
+            color: #cbd5e1;
+            margin-top: 10px;
+        """)
+
+        layout.addWidget(self._main_label)
+        layout.addWidget(self._sub_label)
+
+        self._apply_style(active=False)
+
+    def set_selection(self, file_paths):
+        """设置已选择文件 - 更新显示内容"""
+        if file_paths:
+            lines = [f"✅ 已选择 {len(file_paths)} 个文件："]
+            for i, fp in enumerate(file_paths):
+                try:
+                    fsize = os.path.getsize(fp) / (1024 * 1024)
+                except:
+                    fsize = 0
+                lines.append(f"  {i + 1}. {os.path.basename(fp)}  ({fsize:.1f} MB)")
+            self._main_label.setText("\n".join(lines))
+            self._main_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+            self._sub_label.setText("可继续拖入新文件（自动替换），或点击按钮添加更多")
+            self._has_selection = True
+            self._apply_style(active=True)
+        else:
+            self._main_label.setText("📄 请把账单Excel文件拖入框中")
+            self._main_label.setAlignment(Qt.AlignCenter)
+            self._sub_label.setText("或点击右侧「选择Excel文件」按钮（最多5个，支持 .xlsx / .xls / .csv）")
+            self._has_selection = False
+            self._apply_style(active=False)
+
+    def _apply_style(self, active=False, dragging=False):
+        if dragging:
+            self.setStyleSheet("""
+                QFrame {
+                    background: #eef2ff;
+                    border: 2px dashed #4f46e5;
+                    border-radius: 12px;
+                    min-height: 140px;
+                }
+            """)
+        elif active:
+            self.setStyleSheet("""
+                QFrame {
+                    background: #eef2ff;
+                    border: 1px solid #c7d2fe;
+                    border-radius: 12px;
+                    min-height: 140px;
+                }
+            """)
+        else:
+            self.setStyleSheet("""
+                QFrame {
+                    background: #f8fafc;
+                    border: 2px dashed #cbd5e1;
+                    border-radius: 12px;
+                    min-height: 140px;
+                }
+                QFrame:hover {
+                    border-color: #94a3b8;
+                    background: #f1f5f9;
+                }
+            """)
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasUrls():
+            self._apply_style(active=False, dragging=True)
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event):
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dragLeaveEvent(self, event):
+        # 离开时恢复到之前的状态（选中则显示选中样式，否则默认样式）
+        self._apply_style(active=self._has_selection, dragging=False)
+        event.accept()
+
+    def dropEvent(self, event):
+        file_paths = []
+        seen = set()
+        for url in event.mimeData().urls():
+            if url.isLocalFile():
+                path = url.toLocalFile()
+                if path.lower().endswith(('.xlsx', '.xls', '.csv')) and path not in seen:
+                    seen.add(path)
+                    file_paths.append(path)
+
+        if file_paths:
+            # 恢复样式并发出信号
+            self._apply_style(active=True, dragging=False)
+            self.files_dropped.emit(file_paths)
+            event.acceptProposedAction()
+        else:
+            self._apply_style(active=self._has_selection, dragging=False)
+            event.ignore()
+
+
 class ResultLoadWorker(QThread):
     """结果数据加载后台线程 - 仅加载显示所需数据，避免UI卡死和内存溢出"""
     finished = pyqtSignal(dict)  # {summary: {...}, prepared: [rows], total_rows, display_count}
@@ -1006,44 +1137,68 @@ class MainWindow(QMainWindow):
         widget = QWidget()
         layout = QVBoxLayout(widget)
 
-        # 选择文件区
-        file_group = QGroupBox("📂 第一步：选择Excel文件（最多5个）")
+        # 选择文件区 - 大的拖拽区域，支持拖入 + 点击两种方式
+        file_group = QGroupBox("📂 第一步：选择Excel文件（最多5个，可直接拖入或点击按钮选择）")
         file_layout = QVBoxLayout(file_group)
 
-        # 文件列表
+        # 拖拽区域 + 按钮（同一行）
         file_row = QHBoxLayout()
-        self.file_list_label = QLabel("未选择文件（提示：可一次选择最多5个文件分批计算）")
-        self.file_list_label.setStyleSheet("""
-            color: #64748b;
-            padding: 10px 12px;
-            background: #f8fafc;
-            border: 1px dashed #cbd5e1;
-            border-radius: 8px;
-            font-size: 11px;
-        """)
-        self.file_list_label.setWordWrap(True)
-        self.file_list_label.setMinimumHeight(36)
-        file_row.addWidget(self.file_list_label, 1)
+
+        # 拖拽区域（占主要宽度，大框）
+        self.file_drop_zone = DropZone()
+        self.file_drop_zone.files_dropped.connect(self._on_files_dropped)
+        file_row.addWidget(self.file_drop_zone, 1)
+
+        # 选择按钮（右侧）
+        btn_col = QVBoxLayout()
+        btn_col.setAlignment(Qt.AlignTop)
 
         select_btn = QPushButton("📂 选择Excel文件")
+        select_btn.setMinimumHeight(44)
         select_btn.setStyleSheet("""
             QPushButton {
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
                     stop:0 #6366f1, stop:1 #4f46e5);
                 color: white;
                 border: none;
-                padding: 6px 16px;
+                padding: 10px 18px;
                 border-radius: 8px;
-                font-size: 11px;
+                font-size: 12px;
+                font-weight: 500;
             }
             QPushButton:hover {
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
                     stop:0 #818cf8, stop:1 #6366f1);
             }
+            QPushButton:pressed {
+                background: #4338ca;
+            }
         """)
-        select_btn.clicked.connect(self._select_file)
-        file_row.addWidget(select_btn)
+        select_btn.clicked.connect(self._select_file_dialog)
+        btn_col.addWidget(select_btn)
 
+        clear_btn = QPushButton("🗑 清空")
+        clear_btn.setMinimumHeight(36)
+        clear_btn.setStyleSheet("""
+            QPushButton {
+                background: #ffffff;
+                color: #64748b;
+                border: 1px solid #e2e8f0;
+                padding: 6px 14px;
+                border-radius: 8px;
+                font-size: 11px;
+                margin-top: 8px;
+            }
+            QPushButton:hover {
+                background: #f8fafc;
+                border-color: #cbd5e1;
+                color: #475569;
+            }
+        """)
+        clear_btn.clicked.connect(self._clear_selected_files)
+        btn_col.addWidget(clear_btn)
+
+        file_row.addLayout(btn_col)
         file_layout.addLayout(file_row)
         layout.addWidget(file_group)
 
@@ -1469,6 +1624,21 @@ class MainWindow(QMainWindow):
         self.default_empty_weight_fee.setFixedWidth(80)
         default_layout.addWidget(self.default_empty_weight_fee)
 
+        # 计泡系数（用于体积重计算：体积重 = 长×宽×高 ÷ 计泡系数）
+        default_layout.addWidget(QLabel("计泡系数:"))
+        self.default_vol_divisor = QComboBox()
+        self.default_vol_divisor.setEditable(True)
+        self.default_vol_divisor.setFixedWidth(130)
+        self.default_vol_divisor.addItems([
+            "6000 (顺丰/京东/德邦)",
+            "8000 (圆通/中通/韵达)",
+            "5000 (EMS)",
+            "12000 (大件轻抛)",
+            "6000"
+        ])
+        self.default_vol_divisor.setCurrentIndex(4)
+        default_layout.addWidget(self.default_vol_divisor)
+
         btn_save_default = QPushButton("💾 保存默认设置")
         btn_save_default.clicked.connect(self._save_default_settings)
         default_layout.addWidget(btn_save_default)
@@ -1610,20 +1780,19 @@ class MainWindow(QMainWindow):
 
         # 客户规则采用简化分组表（14个组覆盖34省+港澳台）
         self.station_rule_table = QTableWidget()
-        self.station_rule_table.setColumnCount(8)
+        self.station_rule_table.setColumnCount(7)
         self.station_rule_table.setHorizontalHeaderLabels(
-            ["分组名称", "涵盖省份", "首重费(元)", "续重费(元)", "保底费(元)", "续重单位", "重量进位", "计泡系数"]
+            ["分组名称", "涵盖省份", "首重费(元)", "续重费(元)", "保底费(元)", "续重单位", "重量进位"]
         )
         self.station_rule_table.horizontalHeader().setStretchLastSection(False)
         # 为每列设置最小宽度，避免右侧文字被截断
         self.station_rule_table.setColumnWidth(0, 100)
         self.station_rule_table.setColumnWidth(1, 260)
-        self.station_rule_table.setColumnWidth(2, 80)
-        self.station_rule_table.setColumnWidth(3, 80)
-        self.station_rule_table.setColumnWidth(4, 80)
-        self.station_rule_table.setColumnWidth(5, 100)
-        self.station_rule_table.setColumnWidth(6, 110)
-        self.station_rule_table.setColumnWidth(7, 140)
+        self.station_rule_table.setColumnWidth(2, 95)
+        self.station_rule_table.setColumnWidth(3, 95)
+        self.station_rule_table.setColumnWidth(4, 95)
+        self.station_rule_table.setColumnWidth(5, 115)
+        self.station_rule_table.setColumnWidth(6, 140)
         self.station_rule_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Interactive)
         self.station_rule_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self.station_rule_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Interactive)
@@ -1833,14 +2002,14 @@ class MainWindow(QMainWindow):
         # 活动加价规则（双十一、618等大促期间加价）
         promotion_group = QGroupBox("🎁 活动加价规则")
         promo_layout = QVBoxLayout(promotion_group)
-        promo_info = QLabel("支持设置多条活动加价规则。计算时自动检测当前日期是否在活动期间，按规则加价。")
+        promo_info = QLabel("支持设置多条活动加价规则。系统按 Excel 中每行的【业务日期】判断是否在活动期间，按规则加价。(省份留空=不限)")
         promo_info.setStyleSheet("color: #64748b; padding: 2px; font-size: 11px;")
         promo_layout.addWidget(promo_info)
 
         # 活动规则表格
         self.promotion_table = QTableWidget()
         self.promotion_table.setColumnCount(6)
-        self.promotion_table.setHorizontalHeaderLabels(["活动名称", "开始日期", "结束日期", "加价类型", "加价值", "限定省份(逗号分隔)"])
+        self.promotion_table.setHorizontalHeaderLabels(["活动名称", "开始日期", "结束日期", "加价类型", "加价值", "限定省份(逗号分隔，中英文逗号均可)"])
         self.promotion_table.horizontalHeader().setStretchLastSection(True)
         self.promotion_table.setEditTriggers(QAbstractItemView.AllEditTriggers)
         self.promotion_table.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -1979,8 +2148,7 @@ class MainWindow(QMainWindow):
                         self._station_province_cache[code] = {}
                     if province:
                         self._station_province_cache[code][province] = (
-                            r.first_fee, r.continued_fee, r.min_fee, r.continued_unit, r.weight_rounding,
-                            getattr(r, '计泡系数', 6000.0)
+                            r.first_fee, r.continued_fee, r.min_fee, r.continued_unit, r.weight_rounding
                         )
 
             # 判断每个客户是"继承区域"还是"专属规则"
@@ -2392,23 +2560,6 @@ class MainWindow(QMainWindow):
                     rounding_combo.setEnabled(False)
                 self.station_rule_table.setCellWidget(row, 6, rounding_combo)
 
-                # 计泡系统 QComboBox（列7）
-                vol_div_combo = QComboBox()
-                vol_div_combo.addItems(["6000（顺丰/京东/德邦）", "8000（圆通/中通/韵达）", "5000（EMS）", "12000（大件轻抛）"])
-                vol_div_combo.setMinimumHeight(26)
-                # 从缓存读取计泡系数，找不到则默认6000
-                vol_div_value = 6000
-                for province in provinces:
-                    if province in cached_data:
-                        data = cached_data[province]
-                        if len(data) >= 6:
-                            vol_div_value = data[5]
-                            break
-                vol_div_text = f"{int(vol_div_value)}（" + ["6000（顺丰/京东/德邦）", "8000（圆通/中通/韵达）", "5000（EMS）", "12000（大件轻抛）"][
-                    {6000: 0, 8000: 1, 5000: 2, 12000: 3}.get(vol_div_value, 0)]
-                vol_div_combo.setCurrentText(vol_div_text)
-                self.station_rule_table.setCellWidget(row, 7, vol_div_combo)
-
             except Exception as row_err:
                 import logging
                 logging.warning(f"填充分组 [{gname}] 时出错: {row_err}")
@@ -2696,10 +2847,7 @@ class MainWindow(QMainWindow):
             if item:
                 item.setFlags(item.flags() | Qt.ItemIsEditable)
 
-        # 计泡系数（列7）- 全局规则只读显示默认值6000
-        vol_div_item = QTableWidgetItem("6000（默认）")
-        vol_div_item.setFlags(vol_div_item.flags() & ~Qt.ItemIsEditable)
-        self.station_rule_table.setItem(row, 7, vol_div_item)
+        # （计泡系数在顶部"全局默认设置"区域统一设置）
 
     def _add_station(self):
         """新增客户"""
@@ -2960,7 +3108,6 @@ class MainWindow(QMainWindow):
                                     r.first_fee, r.continued_fee, r.min_fee,
                                     r.continued_unit or "kg",
                                     r.weight_rounding or "actual",
-                                    getattr(r, '计泡系数', 6000.0),
                                 ]
 
             # 6. 自动选中第一个客户并刷新右侧
@@ -3003,16 +3150,12 @@ class MainWindow(QMainWindow):
                 if code in self._station_province_cache and self._station_province_cache[code]:
                     # 专属规则 - 每个省份一条
                     for province, data in self._station_province_cache[code].items():
-                        if len(data) >= 6:
-                            first_fee, continued_fee, min_fee, continued_unit, weight_rounding, vol_div = data
-                        elif len(data) >= 5:
-                            first_fee, continued_fee, min_fee, continued_unit, weight_rounding = data
-                            vol_div = 6000.0
+                        if len(data) >= 5:
+                            first_fee, continued_fee, min_fee, continued_unit, weight_rounding = data[:5]
                         else:
                             first_fee, continued_fee, min_fee = data[:3]
                             continued_unit = data[3] if len(data) > 3 else "kg"
                             weight_rounding = "actual"
-                            vol_div = 6000.0
                         rule = Rule(
                             name=f"{name} - {province}",
                             regions=province,
@@ -3025,7 +3168,6 @@ class MainWindow(QMainWindow):
                             rule_type="station",
                             continued_unit=continued_unit,
                             weight_rounding=weight_rounding,
-                            计泡系数=vol_div,
                         )
                         all_rules.append(rule)
                 else:
@@ -3056,6 +3198,8 @@ class MainWindow(QMainWindow):
             if not has_global:
                 all_rules.append(Rule("全局规则", "", "", 0, 999, 6.0, 3.0, 6.0, "global"))
 
+            # （计泡系数由顶部"全局默认设置"统一管理，点"保存默认设置"保存）
+
             # 收集活动加价规则（含省份限定）
             promo_list = []
             for row in range(self.promotion_table.rowCount()):
@@ -3068,6 +3212,9 @@ class MainWindow(QMainWindow):
                 mtype = get_promo_val(3)
                 mval = get_promo_val(4)
                 regions = get_promo_val(5)  # 省份限定（逗号分隔），空=所有省份
+                # 统一中文逗号"，" → 英文逗号","，避免用户输入混淆
+                if regions:
+                    regions = regions.replace("，", ",")
                 if name and start and end:
                     promo_list.append({
                         "name": name,
@@ -3160,17 +3307,6 @@ class MainWindow(QMainWindow):
             else:
                 rounding_code = "actual"
 
-            # 计泡系数（列7）
-            vol_div_widget = self.station_rule_table.cellWidget(table_row, 7)
-            if vol_div_widget and isinstance(vol_div_widget, QComboBox):
-                vol_div_text = vol_div_widget.currentText()
-                # 从文本中提取数字，如 "6000（顺丰/京东/德邦）" -> 6000
-                import re
-                m = re.search(r'\d+', vol_div_text)
-                vol_div_code = float(m.group()) if m else 6000.0
-            else:
-                vol_div_code = 6000.0
-
             # 找到该分组对应的省份列表
             target_provinces = []
             for (gn, provs, *_) in PROVINCE_GROUPS:
@@ -3182,7 +3318,7 @@ class MainWindow(QMainWindow):
                 target_provinces = [p for p in provinces_text.replace("、", " ").split() if p]
 
             for province in target_provinces:
-                province_data[province] = (first_fee, continued_fee, min_fee, unit_code, rounding_code, vol_div_code)
+                province_data[province] = (first_fee, continued_fee, min_fee, unit_code, rounding_code)
 
         if province_data:
             self._station_province_cache[station_code] = province_data
@@ -3269,6 +3405,14 @@ class MainWindow(QMainWindow):
                 self.default_min_fee.setText(str(data["min_fee"]))
             if "empty_weight_fee" in data:
                 self.default_empty_weight_fee.setText(str(data["empty_weight_fee"]))
+            if "vol_divisor" in data:
+                val = str(data["vol_divisor"])
+                # 如果下拉框已存在相同项，选中它；否则用文本
+                idx = self.default_vol_divisor.findText(val)
+                if idx >= 0:
+                    self.default_vol_divisor.setCurrentIndex(idx)
+                else:
+                    self.default_vol_divisor.setCurrentText(val)
         except Exception:
             pass
 
@@ -3276,12 +3420,20 @@ class MainWindow(QMainWindow):
         """保存全局默认设置"""
         import json
         import os
+        import re
         try:
             # 验证输入
             first_weight = float(self.default_first_weight.text() or 1.0)
             continued_fee = float(self.default_continued_fee.text() or 2.0)
             min_fee = float(self.default_min_fee.text() or 5.0)
             empty_weight_fee = float(self.default_empty_weight_fee.text() or 3.0)
+
+            # 计泡系数：从下拉框提取数字（支持 "6000 (顺丰/京东/德邦)" 格式）
+            vol_text = self.default_vol_divisor.currentText().strip()
+            vol_match = re.search(r"(\d+)", vol_text)
+            vol_divisor = float(vol_match.group(1)) if vol_match else 6000.0
+            if vol_divisor <= 0:
+                raise ValueError("计泡系数必须大于0")
 
             # 保存到配置文件
             config_file = get_config_file("default_settings.json")
@@ -3290,12 +3442,41 @@ class MainWindow(QMainWindow):
                 "first_weight": first_weight,
                 "continued_fee": continued_fee,
                 "min_fee": min_fee,
-                "empty_weight_fee": empty_weight_fee
+                "empty_weight_fee": empty_weight_fee,
+                "vol_divisor": vol_divisor
             }
             with open(config_file, "w", encoding="utf-8") as f:
                 json.dump(config, f, ensure_ascii=False, indent=2)
 
-            QMessageBox.information(self, "成功", "默认设置已保存！")
+            # 同时同步到 fee_rules.json 的 default_计泡系数
+            try:
+                fee_rules_file = get_config_file("fee_rules.json")
+                if os.path.exists(fee_rules_file):
+                    with open(fee_rules_file, "r", encoding="utf-8") as f:
+                        fee_data = json.load(f)
+                    fee_data["default_计泡系数"] = vol_divisor
+                    with open(fee_rules_file, "w", encoding="utf-8") as f:
+                        json.dump(fee_data, f, ensure_ascii=False, indent=2)
+            except Exception:
+                pass
+
+            # 显示所有参数的保存结果
+            result_msg = (
+                f"默认设置已保存！\n\n"
+                f"默认首重: ¥{first_weight:.2f}/kg\n"
+                f"默认续重单价: ¥{continued_fee:.2f}/kg\n"
+                f"默认保底价: ¥{min_fee:.2f}\n"
+                f"无重量默认价: ¥{empty_weight_fee:.2f}\n"
+                f"全局计泡系数: {int(vol_divisor)}\n\n"
+                f"（下次计算时生效）"
+            )
+            QMessageBox.information(self, "成功", result_msg)
+
+            # 立即重载规则，确保下次计算使用新值
+            try:
+                self._reload_rules_from_file_only()
+            except Exception:
+                pass
         except ValueError as e:
             QMessageBox.warning(self, "格式错误", str(e))
         except Exception as e:
@@ -3303,30 +3484,53 @@ class MainWindow(QMainWindow):
 
     # ==================== 事件处理 ====================
 
-    def _select_file(self):
-        """选择Excel文件 - 支持最多5个文件批量导入"""
+    def _select_file_dialog(self):
+        """打开文件对话框选择Excel文件"""
         file_paths, _ = QFileDialog.getOpenFileNames(
             self, "选择Excel文件（最多5个）", "",
             "Excel Files (*.xlsx *.xls);;CSV Files (*.csv);;All Files (*)"
         )
         if file_paths:
-            # 限制最多5个
-            if len(file_paths) > 5:
-                QMessageBox.warning(self, "提示", f"最多支持同时处理5个文件，已自动截取前5个（共选择了{len(file_paths)}个）")
-                file_paths = file_paths[:5]
+            self._apply_selected_files(file_paths)
 
-            self.selected_files = file_paths
+    def _on_files_dropped(self, file_paths):
+        """拖拽区域接收到文件后处理"""
+        if file_paths:
+            self._apply_selected_files(file_paths)
 
-            # 显示文件列表
-            file_list_text = f"已选择 {len(file_paths)} 个文件：\n"
-            for i, fp in enumerate(file_paths):
-                fsize = os.path.getsize(fp) / (1024 * 1024)
-                file_list_text += f"  {i + 1}. {os.path.basename(fp)}  ({fsize:.1f} MB)\n"
-            self.file_list_label.setText(file_list_text.strip())
-            self.file_list_label.setStyleSheet("color: #4f46e5; padding: 8px 12px; background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 8px; font-size: 11px;")
+    def _clear_selected_files(self):
+        """清空已选择的文件"""
+        self.selected_files = []
+        if hasattr(self, "file_drop_zone"):
+            self.file_drop_zone.set_selection([])
+        self.match_label.setText("请先选择Excel文件（按第一个文件自动匹配列名）")
+        self.match_label.setStyleSheet("""
+            padding: 10px 12px;
+            color: #334155;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 11px;
+        """)
 
-            # 用第一个文件预览列名
-            self._preview_columns_async(file_paths[0])
+    def _apply_selected_files(self, file_paths):
+        """统一处理文件列表（对话框或拖入都走这里）"""
+        if not file_paths:
+            return
+
+        # 限制最多5个
+        if len(file_paths) > 5:
+            QMessageBox.warning(self, "提示", f"最多支持同时处理5个文件，已自动截取前5个（共选择了{len(file_paths)}个）")
+            file_paths = file_paths[:5]
+
+        self.selected_files = file_paths
+
+        # 显示文件列表（在拖拽区域中）
+        if hasattr(self, "file_drop_zone"):
+            self.file_drop_zone.set_selection(file_paths)
+
+        # 用第一个文件预览列名
+        self._preview_columns_async(file_paths[0])
 
     def _preview_columns_async(self, file_path):
         """异步预览列名和匹配结果 - 不会阻塞UI主线程"""

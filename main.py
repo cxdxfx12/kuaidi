@@ -4,19 +4,33 @@
 """
 import sys
 import os
-import traceback
-import logging
 
-# PyInstaller 打包后，多进程子进程需要调用 freeze_support()
-if hasattr(sys, 'frozen'):
-    try:
-        import multiprocessing
-        multiprocessing.freeze_support()
-    except Exception:
-        pass
+# ============================================================
+# multiprocessing 启动保护（必须放在所有其他代码之前）
+# - freeze_support: PyInstaller 打包后子进程需要
+# - set_start_method('spawn'): Windows 上必须使用 spawn 方式
+# ============================================================
+import multiprocessing
+
+try:
+    multiprocessing.freeze_support()
+except Exception:
+    pass
+
+try:
+    if sys.platform == 'win32':
+        multiprocessing.set_start_method('spawn', force=True)
+except RuntimeError:
+    # 已被设置过，忽略
+    pass
+except Exception:
+    pass
 
 # 添加项目根目录到Python路径
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import traceback
+import logging
 
 # 配置日志
 log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')

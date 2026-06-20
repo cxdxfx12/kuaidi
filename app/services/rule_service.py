@@ -100,9 +100,10 @@ class Rule:
 
     def matches(self, region: str = "", station_code: str = "", weight: float = 0.0) -> bool:
         """判断是否匹配该规则"""
-        # 网点匹配
+        # 网点匹配（支持中英文逗号）
         if self.stations.strip():
-            station_list = [s.strip() for s in self.stations.split(",") if s.strip()]
+            _stations_norm = self.stations.replace("，", ",")
+            station_list = [s.strip() for s in _stations_norm.split(",") if s.strip()]
             if station_code and station_code.strip() not in station_list:
                 return False
         
@@ -110,7 +111,9 @@ class Rule:
         region_match = False
         region = (region or "").strip()
         if self.regions.strip():
-            keywords = [k.strip() for k in self.regions.split(",") if k.strip()]
+            # 支持中英文逗号分割： "浙江,江苏" 或 "浙江，江苏"
+            _regions_norm = self.regions.replace("，", ",")
+            keywords = [k.strip() for k in _regions_norm.split(",") if k.strip()]
             region_match = any(k in region for k in keywords)
         else:
             region_match = True
