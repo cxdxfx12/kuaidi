@@ -17,7 +17,11 @@ DEFAULT_MAPPINGS = {
     "courier_name": ["快递员姓名", "快递员", "派件员", "业务员", "收派员"],
     "region_code": ["区域编码", "目的地编码", "省份编码", "城市编码"],
     "region_name": ["目的省份", "目的省", "目的地省份", "收件地址", "区域", "目的地", "派送区域", "省份", "省市区", "目的地省市区"],
-    "weight": ["重量", "重量(kg)", "重量(公斤)", "kg", "公斤", "实重", "计费重量", "实际重量"],
+    "weight": ["重量", "重量(kg)", "重量(公斤)", "公斤", "实重", "计费重量", "实际重量", "结算重量", "称重重量"],
+    "length": ["长", "长度", "长(cm)", "长(CM)", "尺寸长", "件长", "包装长"],
+    "width": ["宽", "宽度", "宽(cm)", "宽(CM)", "尺寸宽", "件宽", "包装宽"],
+    "height": ["高", "高度", "高(cm)", "高(CM)", "尺寸高", "件高", "包装高"],
+    "volume_weight": ["体积重", "体积重量", "体积重量(kg)", "抛货体积重", "材积", "材积重", "材积重量", "体积(kg)"],
     "quantity": ["件数", "数量", "包裹数", "箱数", "票数", "总件数"],
     "service_type": ["服务类型", "时效类型", "快递类型", "件类型", "产品类型"],
     "sender": ["寄件人", "发件人", "发货人"],
@@ -97,12 +101,12 @@ class ColumnMatcher:
                         continue
                     return standard
 
-        # 第二轮：包含匹配 - 更严格：alias的关键词必须出现在列名中
+        # 第二轮：包含匹配 - alias的关键词必须出现在列名中，且最少3个字符
         for standard, aliases in self.mappings.items():
             for alias in aliases:
                 alias_lower = alias.lower().strip()
-                # 最少2个字符才有模糊匹配意义
-                if len(alias_lower) >= 2 and alias_lower in col_lower:
+                # 最少3个字符才有模糊匹配意义（避免"kg"匹配"体积重(kg)"等误匹配）
+                if len(alias_lower) >= 3 and alias_lower in col_lower:
                     if standard == "region_name" and (is_city_column or is_sign_column):
                         continue
                     return standard

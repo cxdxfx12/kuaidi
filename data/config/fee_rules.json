@@ -1,7 +1,7 @@
 {
-  "version": "2.2",
-  "description": "大圣运费计算规则 - 支持三层规则体系（客户级→区域级→全局级）+ 活动加价",
-  "updated_at": "2026-06-17 03:57:25",
+  "version": "2.3",
+  "description": "大圣运费计算规则 v2.3 - 支持体积重计费(抛货系数)+三层规则体系+活动加价",
+  "updated_at": "2026-06-20 12:00:00",
   "rules": [
     {
       "name": "蜜丝婷 - 北京",
@@ -13,7 +13,8 @@
       "continued_fee": 1.8,
       "min_fee": 2.0,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "蜜丝婷 - 天津",
@@ -25,7 +26,8 @@
       "continued_fee": 1.8,
       "min_fee": 3.0,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "蜜丝婷 - 上海",
@@ -37,7 +39,8 @@
       "continued_fee": 1.5,
       "min_fee": 4.0,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "蜜丝婷 - 重庆",
@@ -49,7 +52,8 @@
       "continued_fee": 2.5,
       "min_fee": 5.0,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "蜜丝婷 - 江苏",
@@ -61,7 +65,8 @@
       "continued_fee": 1.5,
       "min_fee": 1.5,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "蜜丝婷 - 浙江",
@@ -73,7 +78,8 @@
       "continued_fee": 1.5,
       "min_fee": 1.5,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "蜜丝婷 - 安徽",
@@ -85,7 +91,8 @@
       "continued_fee": 1.5,
       "min_fee": 3.5,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "蜜丝婷 - 福建",
@@ -97,7 +104,8 @@
       "continued_fee": 1.5,
       "min_fee": 3.5,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "蜜丝婷 - 江西",
@@ -109,7 +117,8 @@
       "continued_fee": 1.5,
       "min_fee": 3.5,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "蜜丝婷 - 山东",
@@ -121,7 +130,8 @@
       "continued_fee": 1.5,
       "min_fee": 3.5,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "蜜丝婷 - 河北",
@@ -133,7 +143,8 @@
       "continued_fee": 1.8,
       "min_fee": 4.0,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "蜜丝婷 - 山西",
@@ -145,7 +156,8 @@
       "continued_fee": 1.8,
       "min_fee": 4.0,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "蜜丝婷 - 内蒙古",
@@ -157,7 +169,8 @@
       "continued_fee": 1.8,
       "min_fee": 4.0,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "蜜丝婷 - 广东",
@@ -169,7 +182,8 @@
       "continued_fee": 1.8,
       "min_fee": 4.0,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "蜜丝婷 - 广西",
@@ -181,7 +195,8 @@
       "continued_fee": 1.8,
       "min_fee": 4.0,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "蜜丝婷 - 海南",
@@ -193,7 +208,8 @@
       "continued_fee": 1.8,
       "min_fee": 4.0,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "蜜丝婷 - 河南",
@@ -205,7 +221,8 @@
       "continued_fee": 2.0,
       "min_fee": 4.5,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "蜜丝婷 - 湖北",
@@ -217,7 +234,8 @@
       "continued_fee": 2.0,
       "min_fee": 4.5,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "蜜丝婷 - 湖南",
@@ -229,7 +247,8 @@
       "continued_fee": 2.0,
       "min_fee": 4.5,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "蜜丝婷 - 四川",
@@ -241,7 +260,8 @@
       "continued_fee": 2.5,
       "min_fee": 5.0,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "蜜丝婷 - 贵州",
@@ -253,7 +273,8 @@
       "continued_fee": 2.5,
       "min_fee": 5.0,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "蜜丝婷 - 云南",
@@ -265,7 +286,8 @@
       "continued_fee": 2.5,
       "min_fee": 5.0,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "蜜丝婷 - 西藏",
@@ -277,7 +299,8 @@
       "continued_fee": 2.5,
       "min_fee": 5.0,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "蜜丝婷 - 陕西",
@@ -289,7 +312,8 @@
       "continued_fee": 4.0,
       "min_fee": 8.0,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "蜜丝婷 - 甘肃",
@@ -301,7 +325,8 @@
       "continued_fee": 4.0,
       "min_fee": 8.0,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "蜜丝婷 - 青海",
@@ -313,7 +338,8 @@
       "continued_fee": 4.0,
       "min_fee": 8.0,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "蜜丝婷 - 宁夏",
@@ -325,7 +351,8 @@
       "continued_fee": 4.0,
       "min_fee": 8.0,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "蜜丝婷 - 新疆",
@@ -337,7 +364,8 @@
       "continued_fee": 4.0,
       "min_fee": 8.0,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "蜜丝婷 - 辽宁",
@@ -349,7 +377,8 @@
       "continued_fee": 2.5,
       "min_fee": 5.0,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "蜜丝婷 - 吉林",
@@ -361,7 +390,8 @@
       "continued_fee": 2.5,
       "min_fee": 5.0,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "蜜丝婷 - 黑龙江",
@@ -373,7 +403,8 @@
       "continued_fee": 2.5,
       "min_fee": 5.0,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "蜜丝婷 - 香港",
@@ -385,7 +416,8 @@
       "continued_fee": 20.0,
       "min_fee": 30.0,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "蜜丝婷 - 澳门",
@@ -397,7 +429,8 @@
       "continued_fee": 20.0,
       "min_fee": 30.0,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "蜜丝婷 - 台湾",
@@ -409,7 +442,8 @@
       "continued_fee": 20.0,
       "min_fee": 30.0,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "电商VIP客户",
@@ -421,7 +455,8 @@
       "continued_fee": 0.0,
       "min_fee": 0.0,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "月结客户",
@@ -433,7 +468,8 @@
       "continued_fee": 0.0,
       "min_fee": 0.0,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "上海总部网点",
@@ -445,7 +481,8 @@
       "continued_fee": 0.0,
       "min_fee": 0.0,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "杭州旗舰网点",
@@ -457,7 +494,8 @@
       "continued_fee": 0.0,
       "min_fee": 0.0,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "北京核心网点",
@@ -469,7 +507,8 @@
       "continued_fee": 0.0,
       "min_fee": 0.0,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "测试网点 - 网点专属",
@@ -481,7 +520,8 @@
       "continued_fee": 0.0,
       "min_fee": 0.0,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "淘宝店铺A",
@@ -493,7 +533,8 @@
       "continued_fee": 0.0,
       "min_fee": 0.0,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "京东店铺B",
@@ -505,7 +546,8 @@
       "continued_fee": 0.0,
       "min_fee": 0.0,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "拼多多店铺C",
@@ -517,7 +559,8 @@
       "continued_fee": 0.0,
       "min_fee": 0.0,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "抖音电商D",
@@ -529,7 +572,8 @@
       "continued_fee": 0.0,
       "min_fee": 0.0,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "快手店铺E",
@@ -541,7 +585,8 @@
       "continued_fee": 0.0,
       "min_fee": 0.0,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "小红书店铺F",
@@ -553,7 +598,8 @@
       "continued_fee": 0.0,
       "min_fee": 0.0,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "B站店铺G",
@@ -565,7 +611,8 @@
       "continued_fee": 0.0,
       "min_fee": 0.0,
       "rule_type": "station",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     },
     {
       "name": "全局规则",
@@ -577,8 +624,32 @@
       "continued_fee": 3.0,
       "min_fee": 6.0,
       "rule_type": "global",
-      "continued_unit": "kg"
+      "continued_unit": "kg",
+      "计泡系数": 6000
     }
   ],
-  "promotion_rules": []
+  "promotion_rules": [],
+  "default_计泡系数": 6000,
+  "计泡系数_options": [
+    {
+      "label": "顺丰/京东/德邦 (除6000)",
+      "value": 6000
+    },
+    {
+      "label": "圆通/中通/韵达 (除8000)",
+      "value": 8000
+    },
+    {
+      "label": "EMS (除5000)",
+      "value": 5000
+    },
+    {
+      "label": "国际快递 (除5000)",
+      "value": 5000
+    },
+    {
+      "label": "大件轻抛 (除12000)",
+      "value": 12000
+    }
+  ]
 }

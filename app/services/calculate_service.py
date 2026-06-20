@@ -59,6 +59,9 @@ _PROMOTION_RULES = []               # type: List[Dict]
 _PROMOTION_CACHE = []               # type: List[Tuple]
 _EMPTY_WEIGHT_FEE = 3.0
 _RULES_LOADED = False
+# 计泡系数映射（station_code/name -> divisor），默认6000
+_计泡系数_MAP = {}             # type: Dict[str, float]
+_DEFAULT_计泡系数 = 6000
 
 
 def _build_rule_indexes(force_reload: bool = False):
@@ -71,6 +74,7 @@ def _build_rule_indexes(force_reload: bool = False):
     global _STATION_CODE_MAP, _STATION_NAME_MAP, _OUTLET_CODE_MAP, _OUTLET_NAME_MAP
     global _STATION_WITH_REGION_LIST, _REGION_MAP, _GLOBAL_RULES, _PROMOTION_RULES
     global _PROMOTION_CACHE, _EMPTY_WEIGHT_FEE, _RULES_LOADED
+    global _计泡系数_MAP, _DEFAULT_计泡系数
 
     if _RULES_LOADED and not force_reload:
         return
@@ -84,6 +88,31 @@ def _build_rule_indexes(force_reload: bool = False):
     except Exception:
         _RULES_LOADED = True
         return
+
+    # 从 fee_rules.json 加载计泡系数配置
+    try:
+        import json as _json
+        _fee_rules_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+                                        "data", "config", "fee_rules.json")
+        if os.path.exists(_fee_rules_path):
+            with open(_fee_rules_path, "r", encoding="utf-8") as _f:
+                _fee_data = _json.load(_f)
+            _DEFAULT_计泡系数 = float(_fee_data.get("default_计泡系数", 6000))
+            _计泡系数_MAP = {}
+            for _rule in _fee_data.get("rules", []):
+                _vd = float(_rule.get("计泡系数", _DEFAULT_计泡系数))
+                _stations_str = _rule.get("stations", "")
+                if _stations_str:
+                    for _s in _stations_str.split(","):
+                        _s = _s.strip()
+                        if _s:
+                            _计泡系数_MAP[_s] = _vd
+        else:
+            _DEFAULT_计泡系数 = 6000
+            _计泡系数_MAP = {}
+    except Exception:
+        _DEFAULT_计泡系数 = 6000
+        _计泡系数_MAP = {}
 
     _STATION_CODE_MAP = {}     # 客户编码索引
     _STATION_NAME_MAP = {}     # 客户名称索引
@@ -541,25 +570,53 @@ def _process_chunk(args):
             region_code = row_vals[5] or ""
             region_name = row_vals[6] or ""
             weight_str = row_vals[7] or ""
-            quantity_str = row_vals[8] or ""
-            service_type = row_vals[9] or ""
-            raw_date = row_vals[10] or ""
-            raw_customer_code = row_vals[11] or ""
-            raw_customer = row_vals[12] or ""
-            remark = row_vals[13] or ""
-            excel_row_index = row_vals[14]
+            length_str = row_vals[8] or ""
+            width_str = row_vals[9] or ""
+            height_str = row_vals[10] or ""
+            vol_weight_str = row_vals[11] or ""
+            quantity_str = row_vals[12] or ""
+            service_type = row_vals[13] or ""
+            raw_date = row_vals[14] or ""
+            raw_customer_code = row_vals[15] or ""
+            raw_customer = row_vals[16] or ""
+            remark = row_vals[17] or ""
+            excel_row_index = row_vals[18]
 
             try:
                 weight = float(weight_str) if weight_str else 0.0
             except (ValueError, TypeError):
                 weight = 0.0
 
+            # ========== 体积重计算 ==========
+            # 体积重 = 长 × 宽 × 高 ÷ 抛货系数
+            # 计费重量 = max(实重, 体积重)
+            billing_weight = weight
+            try:
+                length = float(length_str) if length_str else 0.0
+                width = float(width_str) if width_str else 0.0
+                height = float(height_str) if height_str else 0.0
+                if length > 0 and width > 0 and height > 0:
+                    # 优先用文件中预存的体积重，否则自己计算
+                    if vol_weight_str:
+                        vol_weight = float(vol_weight_str)
+                    else:
+                        # 通过 station_code 或 station_name 查找除数
+                        divisor = _计泡系数_MAP.get(station_code) or \
+                                  _计泡系数_MAP.get(station_name) or \
+                                  _DEFAULT_计泡系数
+                        vol_weight = (length * width * height) / divisor
+                    # 取较大值为计费重量
+                    if vol_weight > billing_weight:
+                        billing_weight = vol_weight
+            except (ValueError, TypeError, ZeroDivisionError):
+                pass
+
             try:
                 quantity = int(float(quantity_str)) if quantity_str else 1
             except (ValueError, TypeError):
                 quantity = 1
 
-            fee, rule_name, is_exc = match_rule_fast(weight, region_name,
+            fee, rule_name, is_exc = match_rule_fast(billing_weight, region_name,
                                                       station_code, station_name,
                                                       raw_customer_code, raw_customer)
 
@@ -574,7 +631,7 @@ def _process_chunk(args):
             results.append((
                 excel_row_index, tracking_no, station_code, station_name,
                 courier_code, courier_name, region_code, region_name,
-                weight, quantity, service_type, extra_data,
+                billing_weight, quantity, service_type, extra_data,
                 fee, rule_name, 1 if is_exc else 0,
                 "invalid_data" if is_exc else None,
                 remark or (f"无效重量:{weight_str}" if is_exc and weight <= 0 else "")
@@ -678,6 +735,10 @@ class CalculateService:
         idx_region_code = _get_col_idx("region_code")
         idx_region_name = _get_col_idx("region_name")
         idx_weight = _get_col_idx("weight")
+        idx_length = _get_col_idx("length")
+        idx_width = _get_col_idx("width")
+        idx_height = _get_col_idx("height")
+        idx_volume_weight = _get_col_idx("volume_weight")
         idx_quantity = _get_col_idx("quantity")
         idx_service = _get_col_idx("service_type")
         idx_date = _get_col_idx("business_date")
@@ -689,7 +750,8 @@ class CalculateService:
         column_indices = [
             idx_tracking, idx_station_code, idx_station_name,
             idx_courier_code, idx_courier_name, idx_region_code, idx_region_name,
-            idx_weight, idx_quantity, idx_service,
+            idx_weight, idx_length, idx_width, idx_height, idx_volume_weight,
+            idx_quantity, idx_service,
             idx_date, idx_customer_code, idx_customer, idx_remark
         ]
 
